@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
+
   final String title;
 
   @override
@@ -9,12 +12,21 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _counter = 0;
+  Directory dir = Directory('/storage/emulated/0/dcim');
+  late List<FileSystemEntity> files;
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+
+    files = dir.listSync(recursive: true);
+    for (var file in files) {
+      FileStat f1 = file.statSync();
+      print(file.path);
+      print(f1.type);
+    }
+    print(files);
   }
 
   @override
@@ -24,23 +36,18 @@ class _HomePageState extends State<HomePage> {
         title: Text(widget.title),
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
           children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+            if(files!=null)
+              Expanded(
+                child: ListView.builder(
+                itemBuilder: (context, index) =>
+                    Text(files[index].toString() ?? ''),
+                itemCount: files.length ?? 0,
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
+              ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
