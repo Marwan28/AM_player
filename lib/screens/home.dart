@@ -105,6 +105,13 @@ class HomeState extends State<Home> {
     print('---------- videos ----------');
     print(videosPaths);
     print(videosPaths![1].name);
+    final List<AssetEntity> entities = await videosPaths![1].getAssetListRange(start: 0, end: 80);
+    print(' === all entities $entities');
+    for(AssetEntity f in entities){
+      File? s = await f.file;
+      print(' marwan\'s video path: ${s!.path}');
+    }
+
   }
 
   Directory directory = Directory('/storage/emulated/0');
