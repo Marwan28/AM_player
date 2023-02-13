@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
@@ -15,6 +16,12 @@ class _HomePageState extends State<HomePage> {
   Directory dir = Directory('/storage/emulated/0/dcim');
   late List<FileSystemEntity> files;
 
+  get()async{
+    final directory = await getApplicationDocumentsDirectory();
+    print(directory);
+  }
+
+
   @override
   void initState() {
     // TODO: implement initState
@@ -27,7 +34,10 @@ class _HomePageState extends State<HomePage> {
       print(f1.type);
     }
     print(files);
+    //get();
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +52,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: ListView.builder(
                 itemBuilder: (context, index) =>
-                    Text(files[index].toString() ?? ''),
+                    Text('${files[index]}'?? ''),
                 itemCount: files.length ?? 0,
             ),
               ),
