@@ -1,4 +1,4 @@
-import 'package:am_player/bloc/songs_bloc.dart';
+import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/screens/loading.dart';
 import 'package:am_player/song_widget.dart';
 import 'package:am_player/widget.dart';

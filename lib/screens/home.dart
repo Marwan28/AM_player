@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:am_player/bloc/songs_bloc.dart';
+import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/main.dart';
 import 'package:am_player/song.dart';
 import 'package:am_player/song_player.dart';
@@ -25,6 +25,7 @@ class Home extends StatefulWidget {
 class HomeState extends State<Home> {
   SongsBloc songsBloc = MyApp.songsBloc;
   List<String>? songsPaths;
+  List<String>? videosPaths;
 
   void search(String input) {
     tempMusics.then((value) {
@@ -55,13 +56,12 @@ class HomeState extends State<Home> {
   Duration position = Duration.zero;
   TextEditingController searchController = TextEditingController();
   final audioPlayer = AudioPlayer();
-  List<AssetPathEntity>? videosPaths;
+  List<AssetPathEntity>? videosPathsEntity;
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    getDirs();
     getMusic();
     getVideos();
 
@@ -101,16 +101,21 @@ class HomeState extends State<Home> {
   }
 
   getVideos() async {
-    videosPaths = await PhotoManager.getAssetPathList(type: RequestType.video);
+    videosPathsEntity = await PhotoManager.getAssetPathList(type: RequestType.video);
     print('---------- videos ----------');
-    print(videosPaths);
-    print(videosPaths![1].name);
-    final List<AssetEntity> entities = await videosPaths![1].getAssetListRange(start: 0, end: 80);
-    print(' === all entities $entities');
-    for(AssetEntity f in entities){
-      File? s = await f.file;
-      print(' marwan\'s video path: ${s!.path}');
+    print(videosPathsEntity);
+    print(videosPathsEntity![1].name);
+    for(int i = 1;i<videosPathsEntity!.length;i++){
+      final List<AssetEntity> entities = await videosPathsEntity![i].getAssetListRange(start: 0, end: 80);
+      print(' === all entities $entities');
+      for(AssetEntity f in entities){
+        File? s = await f.file;
+        videosPaths?.add(s!.path);
+        print(' marwan\'s video path: ${s!.path}');
+
+      }
     }
+
 
   }
 
@@ -136,7 +141,7 @@ class HomeState extends State<Home> {
         songsPaths = value;
       });
 
-      print(songsPaths);
+      //print(songsPaths);
     });
     await audioQuery
         .querySongs(
@@ -169,6 +174,30 @@ class HomeState extends State<Home> {
         );
       },
     );
+    // await audioQuery.queryAlbums().then((value) {
+    //   print('------query albums');
+    //   print(value);
+    // });
+    // await audioQuery.queryArtists().then((value) {
+    //   print('------query artists');
+    //   print(value);
+    // });
+    // await audioQuery.queryDeviceInfo().then((value) {
+    //   print('------query device info');
+    //   print(value);
+    // });
+    // await audioQuery.queryFromFolder(songsPaths![0]).then((value) {
+    //   print('------query from folder media');
+    //   print(value);
+    // });
+    // await audioQuery.queryGenres().then((value) {
+    //   print('------query genres');
+    //   print(value);
+    // });
+    // await audioQuery.queryPlaylists().then((value) {
+    //   print('------query playlists');
+    //   print(value);
+    // });
     return songs;
   }
 
@@ -200,7 +229,7 @@ class HomeState extends State<Home> {
                         color: Colors.amber,
                         borderRadius: BorderRadius.circular(15)),
                     child: Text(
-                      songsPaths![index],
+                      songsPaths![index].split('/').last,
                       style: const TextStyle(color: Colors.red),
                     ),
                   );
