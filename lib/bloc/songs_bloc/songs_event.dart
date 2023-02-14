@@ -10,8 +10,9 @@ class PlaySongEvent extends SongsEvent{
   PlaySongEvent(this.song);
 }
 
+class LoadSongsEvent extends SongsEvent{}
+
 class StopSongEvent extends SongsEvent{}
 
 class PauseSongEvent extends SongsEvent{}
 
-class LoadSongsEvent extends SongsEvent{}

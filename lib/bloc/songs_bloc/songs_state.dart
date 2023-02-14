@@ -11,6 +11,6 @@ class SongsLoadedState extends SongsState{}
 
 class PlayingSongState extends SongsState{}
 
-class PauseSongState extends SongsState{}
+class PausingSongState extends SongsState{}
 
-class StopSongState extends SongsState{}
+class StopingSongState extends SongsState{}

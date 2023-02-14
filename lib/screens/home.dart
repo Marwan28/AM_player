@@ -1,8 +1,11 @@
 import 'dart:io';
 
 import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
+import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:am_player/main.dart';
-import 'package:am_player/song.dart';
+import 'package:am_player/models/song.dart';
+import 'package:am_player/screens/songs_screens/songs_home_screen.dart';
+import 'package:am_player/screens/videos_screens/videos_home_screen.dart';
 import 'package:am_player/song_player.dart';
 import 'package:am_player/widgets/song_row.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -23,47 +26,46 @@ class Home extends StatefulWidget {
 }
 
 class HomeState extends State<Home> {
-  SongsBloc songsBloc = MyApp.songsBloc;
   List<String>? songsPaths;
   List<String>? videosPaths;
 
-  void search(String input) {
-    tempMusics.then((value) {
-      List<Song> searchedMusics = value
-          .where((element) =>
-              element.title.toString().toLowerCase().startsWith(input))
-          .toList();
-      songs = Future.value(searchedMusics) as List<Song>;
-      setState(() {});
-    });
-  }
+  // void search(String input) {
+  //   tempMusics.then((value) {
+  //     List<Song> searchedMusics = value
+  //         .where((element) =>
+  //             element.title.toString().toLowerCase().startsWith(input))
+  //         .toList();
+  //     songs = Future.value(searchedMusics) as List<Song>;
+  //     setState(() {});
+  //   });
+  // }
+  //
+  // void refresh() {
+  //   setState(() async {
+  //     songs = songsBloc.loadSongs() as List<Song>;
+  //     tempMusics = songs as Future<List<Song>>;
+  //   });
+  // }
 
-  void refresh() {
-    setState(() async {
-      songs = songsBloc.getMusic() as List<Song>;
-      tempMusics = songs as Future<List<Song>>;
-    });
-  }
-
-  late Future<List<Song>> tempMusics;
-  late List<Song> songs;
-  List favoriteMusics = [];
-  bool sortAZ = false;
-  bool shuffle = false;
-  bool isFocused = false;
-  bool isPlaying = false;
-  Duration duration = Duration.zero;
-  Duration position = Duration.zero;
+  // late Future<List<Song>> tempMusics;
+  // late List<Song> songs;
+  // List favoriteMusics = [];
+  // bool sortAZ = false;
+  // bool shuffle = false;
+  // bool isFocused = false;
+  // bool isPlaying = false;
+  //Duration duration = Duration.zero;
+  // position = Duration.zero;
   TextEditingController searchController = TextEditingController();
   final audioPlayer = AudioPlayer();
-  List<AssetPathEntity>? videosPathsEntity;
+
+  //List<AssetPathEntity>? videosPathsEntity;
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
-    getMusic();
-    getVideos();
+    BlocProvider.of<VideosBloc>(context).add(LoadVideosEvent());
+    BlocProvider.of<SongsBloc>(context).add(LoadSongsEvent());
 
     // refresh();
     //
@@ -100,24 +102,24 @@ class HomeState extends State<Home> {
     // });
   }
 
-  getVideos() async {
-    videosPathsEntity = await PhotoManager.getAssetPathList(type: RequestType.video);
-    print('---------- videos ----------');
-    print(videosPathsEntity);
-    print(videosPathsEntity![1].name);
-    for(int i = 1;i<videosPathsEntity!.length;i++){
-      final List<AssetEntity> entities = await videosPathsEntity![i].getAssetListRange(start: 0, end: 80);
-      print(' === all entities $entities');
-      for(AssetEntity f in entities){
-        File? s = await f.file;
-        videosPaths?.add(s!.path);
-        print(' marwan\'s video path: ${s!.path}');
-
-      }
-    }
-
-
-  }
+  // getVideos() async {
+  //   videosPathsEntity = await PhotoManager.getAssetPathList(type: RequestType.video);
+  //   print('---------- videos ----------');
+  //   print(videosPathsEntity);
+  //   print(videosPathsEntity![1].name);
+  //   for(int i = 1;i<videosPathsEntity!.length;i++){
+  //     final List<AssetEntity> entities = await videosPathsEntity![i].getAssetListRange(start: 0, end: 80);
+  //     print(' === all entities $entities');
+  //     for(AssetEntity f in entities){
+  //       File? s = await f.file;
+  //       videosPaths?.add(s!.path);
+  //       print(' marwan\'s video path: ${s!.path}');
+  //
+  //     }
+  //   }
+  //
+  //
+  // }
 
   Directory directory = Directory('/storage/emulated/0');
   late List<FileSystemEntity> files;
@@ -131,109 +133,100 @@ class HomeState extends State<Home> {
     }
   }
 
-  Future<List<Song>> getMusic() async {
-    Permission.storage.request();
-    final audioQuery = OnAudioQuery();
-    List<Song> songs = [];
-    print('marwan ------');
-    await audioQuery.queryAllPath().then((value) {
-      setState(() {
-        songsPaths = value;
-      });
-
-      //print(songsPaths);
-    });
-    await audioQuery
-        .querySongs(
-            sortType: SongSortType.TITLE,
-            uriType: UriType.EXTERNAL,
-            ignoreCase: true)
-        .then(
-      (value) {
-        for (SongModel song in value) {
-          String title = song.title;
-          String? author = song.artist;
-          title = title
-              .replaceAll(RegExp(r'\(.*\)'), '')
-              .replaceAll(RegExp(r'\[.*\]'), '');
-          //print('------marwan------');
-          //print(song.data);
-          songs.add(
-            Song(
-              title: title,
-              filePath: song.data,
-              author: author,
-              rawModel: song,
-            ),
-          );
-        }
-
-        songs.sort(
-          (a, b) =>
-              b.rawModel!.dateModified!.compareTo(a.rawModel!.dateModified!),
-        );
-      },
-    );
-    // await audioQuery.queryAlbums().then((value) {
-    //   print('------query albums');
-    //   print(value);
-    // });
-    // await audioQuery.queryArtists().then((value) {
-    //   print('------query artists');
-    //   print(value);
-    // });
-    // await audioQuery.queryDeviceInfo().then((value) {
-    //   print('------query device info');
-    //   print(value);
-    // });
-    // await audioQuery.queryFromFolder(songsPaths![0]).then((value) {
-    //   print('------query from folder media');
-    //   print(value);
-    // });
-    // await audioQuery.queryGenres().then((value) {
-    //   print('------query genres');
-    //   print(value);
-    // });
-    // await audioQuery.queryPlaylists().then((value) {
-    //   print('------query playlists');
-    //   print(value);
-    // });
-    return songs;
-  }
+  // Future<List<Song>> getMusic() async {
+  //   Permission.storage.request();
+  //   final audioQuery = OnAudioQuery();
+  //   List<Song> songs = [];
+  //   print('marwan ------');
+  //   await audioQuery.queryAllPath().then((value) {
+  //     setState(() {
+  //       songsPaths = value;
+  //     });
+  //
+  //     //print(songsPaths);
+  //   });
+  //   await audioQuery
+  //       .querySongs(
+  //           sortType: SongSortType.TITLE,
+  //           uriType: UriType.EXTERNAL,
+  //           ignoreCase: true)
+  //       .then(
+  //     (value) {
+  //       for (SongModel song in value) {
+  //         String title = song.title;
+  //         String? author = song.artist;
+  //         title = title
+  //             .replaceAll(RegExp(r'\(.*\)'), '')
+  //             .replaceAll(RegExp(r'\[.*\]'), '');
+  //         //print('------marwan------');
+  //         //print(song.data);
+  //         songs.add(
+  //           Song(
+  //             title: title,
+  //             filePath: song.data,
+  //             author: author,
+  //             rawModel: song,
+  //           ),
+  //         );
+  //       }
+  //
+  //       songs.sort(
+  //         (a, b) =>
+  //             b.rawModel!.dateModified!.compareTo(a.rawModel!.dateModified!),
+  //       );
+  //     },
+  //   );
+  //   // await audioQuery.queryAlbums().then((value) {
+  //   //   print('------query albums');
+  //   //   print(value);
+  //   // });
+  //   // await audioQuery.queryArtists().then((value) {
+  //   //   print('------query artists');
+  //   //   print(value);
+  //   // });
+  //   // await audioQuery.queryDeviceInfo().then((value) {
+  //   //   print('------query device info');
+  //   //   print(value);
+  //   // });
+  //   // await audioQuery.queryFromFolder(songsPaths![0]).then((value) {
+  //   //   print('------query from folder media');
+  //   //   print(value);
+  //   // });
+  //   // await audioQuery.queryGenres().then((value) {
+  //   //   print('------query genres');
+  //   //   print(value);
+  //   // });
+  //   // await audioQuery.queryPlaylists().then((value) {
+  //   //   print('------query playlists');
+  //   //   print(value);
+  //   // });
+  //   return songs;
+  // }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('AM player'),
-      ),
-      body: Container(
-        child: songsPaths == null
-            ? const Center(
-                child: CircularProgressIndicator(),
-              )
-            : GridView.builder(
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 3 / 2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                ),
-                itemCount: songsPaths?.length ?? 0,
-                itemBuilder: (ctx, index) {
-                  print(songsPaths![index]);
-                  return Container(
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                        color: Colors.amber,
-                        borderRadius: BorderRadius.circular(15)),
-                    child: Text(
-                      songsPaths![index].split('/').last,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                }),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('AM player'),
+          bottom: TabBar(
+            tabs: [
+              Text(
+                'VIDEOS',
+              ),
+              Text(
+                'SONGS',
+              ),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            VideosHomeScreen(),
+            SongsHomeScreen(),
+          ],
+        ),
       ),
     );
     // TODO: implement build
@@ -490,4 +483,37 @@ class HomeState extends State<Home> {
     //   ),
     // );
   }
+// return Scaffold(
+// appBar: AppBar(
+// title: const Text('AM player'),
+// ),
+// body: Container(
+// child: songsPaths == null
+// ? const Center(
+// child: CircularProgressIndicator(),
+// )
+//     : GridView.builder(
+// gridDelegate:
+// const SliverGridDelegateWithFixedCrossAxisCount(
+// crossAxisCount: 2,
+// childAspectRatio: 3 / 2,
+// crossAxisSpacing: 10,
+// mainAxisSpacing: 10,
+// ),
+// itemCount: songsPaths?.length ?? 0,
+// itemBuilder: (ctx, index) {
+// print(songsPaths![index]);
+// return Container(
+// alignment: Alignment.center,
+// decoration: BoxDecoration(
+// color: Colors.amber,
+// borderRadius: BorderRadius.circular(15)),
+// child: Text(
+// songsPaths![index].split('/').last,
+// style: const TextStyle(color: Colors.red),
+// ),
+// );
+// }),
+// ),
+// );
 }

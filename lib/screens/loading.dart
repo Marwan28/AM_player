@@ -1,3 +1,4 @@
+import 'package:am_player/app_router.dart';
 import 'package:am_player/screens/home.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter/material.dart';
@@ -13,13 +14,9 @@ class Loading extends StatefulWidget {
 class _LoadingState extends State<Loading> {
   load(ctx) async {
     await Future.delayed(const Duration(seconds: 1));
-    Navigator.pushReplacement(
+    Navigator.pushReplacementNamed(
       ctx,
-      PageTransition(
-        type: PageTransitionType.bottomToTop,
-        alignment: Alignment.center,
-        child: const Home(),
-      ),
+      AppRouter.home,
     );
   }
 

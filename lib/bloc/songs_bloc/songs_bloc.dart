@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:am_player/song.dart';
+import 'package:am_player/models/song.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:bloc/bloc.dart';
 import 'package:meta/meta.dart';
@@ -14,16 +14,17 @@ part 'songs_event.dart';
 part 'songs_state.dart';
 
 class SongsBloc extends Bloc<SongsEvent, SongsState> {
-  SongsBloc() : super(SongsInitial()) {
+  SongsBloc() : super(SongsLoadingState()) {
     on<SongsEvent>((event, emit) {
-      // TODO: implement event handler
-      emit(SongsLoadingState());
+    });
+    on<LoadSongsEvent>((event, emit) {
+      loadSongs();
+      emit(SongsLoadedState());
     });
   }
-  List<AssetPathEntity>? videosPathsEntity;
+
   List<String>? songsPaths;
-  List<String>? videosPaths;
-  Future<List<Song>> getMusic() async {
+  Future<List<Song>> loadSongs() async {
     Permission.storage.request();
     final audioQuery = OnAudioQuery();
     List<Song> songs = [];
@@ -66,23 +67,7 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
     );
     return songs;
   }
-  getVideos() async {
-    videosPathsEntity = await PhotoManager.getAssetPathList(type: RequestType.video);
-    print('---------- videos ----------');
-    print(videosPathsEntity);
-    print(videosPathsEntity![1].name);
-    for(int i = 1;i<videosPathsEntity!.length;i++){
-      final List<AssetEntity> entities = await videosPathsEntity![i].getAssetListRange(start: 0, end: 80);
-      print(' === all entities $entities');
-      for(AssetEntity f in entities){
-        File? s = await f.file;
-        videosPaths?.add(s!.path);
-        print(' marwan\'s video path: ${s!.path}');
-      }
-    }
 
-
-  }
 
 
   //
