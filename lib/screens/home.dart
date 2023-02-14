@@ -9,6 +9,7 @@ import 'package:am_player/screens/videos_screens/videos_home_screen.dart';
 import 'package:am_player/song_player.dart';
 import 'package:am_player/widgets/song_row.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:line_icons/line_icons.dart';
@@ -209,8 +210,8 @@ class HomeState extends State<Home> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text('AM player'),
-          bottom: TabBar(
+          title: const Text('AM player'),
+          bottom: const TabBar(
             tabs: [
               Text(
                 'VIDEOS',

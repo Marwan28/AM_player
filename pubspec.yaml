@@ -36,6 +36,7 @@ dependencies:
   hive_flutter: ^1.1.0
   photo_manager: ^2.5.2
   photo_gallery: ^1.1.1
+  video_thumbnail: ^0.5.3
 
 dev_dependencies:
   flutter_test:

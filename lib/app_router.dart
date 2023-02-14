@@ -44,14 +44,14 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (context) => BlocProvider<VideosBloc>.value(
             value: videosBloc,
-            child: const VideosHomeScreen(),
+            child: VideosHomeScreen(),
           ),
         );
       case '/songsHome':
         return MaterialPageRoute(
           builder: (context) => BlocProvider<SongsBloc>.value(
             value:  songsBloc,
-            child: const SongsHomeScreen(),
+            child: SongsHomeScreen(),
           ),
         );
     }
