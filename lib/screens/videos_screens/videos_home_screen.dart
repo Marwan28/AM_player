@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:am_player/app_router.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:am_player/models/video.dart';
 import 'package:flutter/material.dart';
@@ -18,30 +19,6 @@ class VideosHomeScreen extends StatefulWidget {
 class _VideosHomeScreenState extends State<VideosHomeScreen> {
   List<Video>? videos;
 
-  Widget listview() {
-    return ListView.builder(
-      itemBuilder: (ctx, index) {
-        print('---------- listview builder');
-        return Container(
-          margin: const EdgeInsets.all(10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Image.memory(
-                    BlocProvider.of<VideosBloc>(context).videos![index].image),
-              ),
-              Expanded(
-                  child: Text(BlocProvider.of<VideosBloc>(context)
-                      .videos![index]
-                      .title))
-            ],
-          ),
-        );
-      },
-      itemCount: BlocProvider.of<VideosBloc>(context).videos?.length ?? 0,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,15 +33,32 @@ class _VideosHomeScreenState extends State<VideosHomeScreen> {
                 mainAxisSpacing: 10,
               ),
               itemCount: BlocProvider.of<VideosBloc>(context)
-                  .videosPathsEntity!.length,
+                  .videosPathsEntity!
+                  .length,
               itemBuilder: (ctx, index) {
                 return Container(
                   color: Colors.blue,
-                  child: Center(
-                    child: Text(
-                      BlocProvider.of<VideosBloc>(context)
-                          .videosPathsEntity![index]
-                          .name,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        ctx,
+                        AppRouter.folderVideos,
+                        arguments: index,
+                        /*BlocProvider.of<VideosBloc>(context)
+                            .videosPathsEntity![index]*/
+                      );
+                    },
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Folder name: ${BlocProvider.of<VideosBloc>(context).videosPathsEntity![index].name}',
+                          ),
+                          Text(
+                              'number of videos: ${BlocProvider.of<VideosBloc>(context).entities_lenght[BlocProvider.of<VideosBloc>(context).videosPathsEntity![index].id]}'),
+                        ],
+                      ),
                     ),
                   ),
                 );

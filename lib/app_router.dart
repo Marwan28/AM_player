@@ -1,5 +1,6 @@
 import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
+import 'package:am_player/screens/folder_videos.dart';
 import 'package:am_player/screens/home.dart';
 import 'package:am_player/screens/loading.dart';
 import 'package:am_player/screens/songs_screens/songs_home_screen.dart';
@@ -16,6 +17,7 @@ class AppRouter {
   static String videosHome = '/videosHome';
   static String songsHome = '/songsHome';
   static String home = '/home';
+  static String folderVideos = '/folderVideos';
 
 
   Route? generateRoute(RouteSettings settings) {
@@ -52,6 +54,14 @@ class AppRouter {
           builder: (context) => BlocProvider<SongsBloc>.value(
             value:  songsBloc,
             child: SongsHomeScreen(),
+          ),
+        );
+      case '/folderVideos':
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (context) => BlocProvider<VideosBloc>.value(
+            value:  videosBloc,
+            child: FolderVideosScreen(),
           ),
         );
     }
