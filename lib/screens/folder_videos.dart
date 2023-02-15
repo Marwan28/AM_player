@@ -1,3 +1,4 @@
+import 'package:am_player/app_router.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,20 +22,29 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
           return ListView.builder(
           itemBuilder: (ctx, index) {
             print('---------- listview builder');
-            return Container(
-              margin: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Image.memory(BlocProvider.of<VideosBloc>(context)
-                        .folders_videos[BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index]
-                        .image),
-                  ),
-                  Expanded(
-                      child: Text(BlocProvider.of<VideosBloc>(context)
-                          .folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index]
-                          .title))
-                ],
+            return InkWell(
+              onTap: (){Navigator.pushNamed(
+                ctx,
+                AppRouter.playVideo,
+                arguments: BlocProvider.of<VideosBloc>(context).folders_videos[BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index],
+                /*BlocProvider.of<VideosBloc>(context)
+                            .videosPathsEntity![index]*/
+              );},
+              child: Container(
+                margin: const EdgeInsets.all(10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Image.memory(BlocProvider.of<VideosBloc>(context)
+                          .folders_videos[BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index]
+                          .image),
+                    ),
+                    Expanded(
+                        child: Text(BlocProvider.of<VideosBloc>(context)
+                            .folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index]
+                            .title))
+                  ],
+                ),
               ),
             );
           },
