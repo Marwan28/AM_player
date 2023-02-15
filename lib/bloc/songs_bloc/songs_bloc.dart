@@ -17,14 +17,14 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
   SongsBloc() : super(SongsLoadingState()) {
     on<SongsEvent>((event, emit) {
     });
-    on<LoadSongsEvent>((event, emit) {
-      loadSongs();
-      emit(SongsLoadedState());
+    on<LoadSongsEvent>((event, emit) async{
+      await loadSongs(emit);
+
     });
   }
 
   List<String>? songsPaths;
-  Future<List<Song>> loadSongs() async {
+  Future<List<Song>> loadSongs(Emitter emit) async {
     Permission.storage.request();
     final audioQuery = OnAudioQuery();
     List<Song> songs = [];
@@ -65,6 +65,8 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
         );
       },
     );
+    print('songs list lenght: ${songs.length}');
+    emit(SongsLoadedState());
     return songs;
   }
 

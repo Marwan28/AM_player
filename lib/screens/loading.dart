@@ -1,5 +1,8 @@
 import 'package:am_player/app_router.dart';
+import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
+import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:am_player/screens/home.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter/material.dart';
 import 'package:page_transition/page_transition.dart';
@@ -12,26 +15,30 @@ class Loading extends StatefulWidget {
 }
 
 class _LoadingState extends State<Loading> {
-  load(ctx) async {
-    await Future.delayed(const Duration(seconds: 1));
-    Navigator.pushReplacementNamed(
-      ctx,
-      AppRouter.home,
-    );
-  }
 
   @override
   void initState() {
     // TODO: implement initState
+    BlocProvider.of<VideosBloc>(context).add(LoadVideosEvent());
+    BlocProvider.of<SongsBloc>(context).add(LoadSongsEvent());
     super.initState();
-    load(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return const SpinKitRing(
-      color: Colors.red,
-      size: 100,
+    return BlocListener<VideosBloc,VideosState>(
+      listener: (ctx,state){
+        if(BlocProvider.of<VideosBloc>(ctx).state is VideosLoadedState && BlocProvider.of<SongsBloc>(context).state is SongsLoadedState){
+          Navigator.pushReplacementNamed(
+            context,
+            AppRouter.home,
+          );
+        }
+      },
+      child: const SpinKitRing(
+        color: Colors.red,
+        size: 100,
+      ),
     );
   }
 }

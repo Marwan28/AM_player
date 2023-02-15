@@ -65,8 +65,7 @@ class HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    BlocProvider.of<VideosBloc>(context).add(LoadVideosEvent());
-    BlocProvider.of<SongsBloc>(context).add(LoadSongsEvent());
+
 
     // refresh();
     //

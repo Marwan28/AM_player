@@ -24,18 +24,19 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
     on<VideosEvent>((event, emit) {
       // TODO: implement event handler
     });
-    on<LoadVideosEvent>((event, emit) {
-      loadVideos();
-      emit(VideosLoadedState());
+    on<LoadVideosEvent>((event, emit)async {
+      await loadVideos(emit);
+
     });
   }
 
-  loadVideos() async {
+  loadVideos(Emitter emit) async {
     videosPathsEntity =
         await PhotoManager.getAssetPathList(type: RequestType.video);
     print('---------- videos ----------');
+    videosPathsEntity!.removeAt(0);
     //print(videosPathsEntity);
-    for (int i = 1; i < videosPathsEntity!.length; i++) {
+    for (int i = 0; i < videosPathsEntity!.length; i++) {
       final List<AssetEntity> entities =
           await videosPathsEntity![i].getAssetListRange(start: 0, end: 80);
       for (AssetEntity asset in entities) {
@@ -53,7 +54,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         //print(' marwan\'file video path: ${file!.path}');
       }
     }
-
     print(videos!.length);
+    emit(VideosLoadedState());
   }
 }
