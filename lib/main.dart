@@ -4,7 +4,6 @@ import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:am_player/screens/loading.dart';
 import 'package:am_player/song_widget.dart';
 import 'package:am_player/widget.dart';
-import 'package:audio_manager/audio_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 

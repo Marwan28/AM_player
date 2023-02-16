@@ -1,16 +1,10 @@
 // import 'dart:typed_data';
 //
 // import 'package:am_player/main.dart';
-// import 'package:am_player/song.dart';
+// import 'package:am_player/models/song.dart';
 // import 'package:audioplayers/audioplayers.dart';
 // import 'package:flutter/material.dart';
-// import 'package:hive/hive.dart';
 // import 'package:line_icons/line_icon.dart';
-// import 'package:on_audio_query/on_audio_query.dart';
-// import 'package:on_audio_room/details/extensions/entity_checker_extension.dart';
-// import 'package:on_audio_room/on_audio_room.dart';
-// import 'package:page_transition/page_transition.dart';
-// import 'package:permission_handler/permission_handler.dart';
 //
 //
 //

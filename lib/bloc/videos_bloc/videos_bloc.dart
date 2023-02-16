@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 
 part 'videos_event.dart';
 
@@ -21,6 +20,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
   List<Video>? allVideos = [];
   final Map<String, int> entities_lenght = <String, int>{};
   final Map<String, List<Video>> folders_videos = <String, List<Video>>{};
+  late Video currentPlayingVideo;
 
   VideosBloc() : super(VideosLoadingState()) {
     on<VideosEvent>((event, emit) {
@@ -51,19 +51,32 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
       for (AssetEntity asset in entity) {
         File? file = await asset.file;
         videosPaths?.add(file!.path);
+        var m = await asset.getMediaUrl();
         print(asset.title);
+        print(asset.relativePath);
+        print('mmmm ' + m!);
+        print('--------file uri: ${file!.uri}');
+        print('--------file path: ${file!.path}');
+        print('query ' + file.uri.path);
+        print(file.uri.scheme);
         print(file!.path);
+
         allVideos?.add(Video(
           title: asset.title!,
           path: file.path,
           duration: asset.duration,
           image: (await asset.thumbnailData)!,
+          uri: file!.uri,
+          file: file,
         ));
         currentFolderVideosList.add(Video(
-            title: asset.title!,
-            path: file.path,
-            duration: asset.duration,
-            image: (await asset.thumbnailData)!));
+          title: asset.title!,
+          path: file.path,
+          duration: asset.duration,
+          image: (await asset.thumbnailData)!,
+          uri: file!.uri,
+          file: file,
+        ));
         //print(' marwan\'file video path: ${file!.path}');
       }
       folders_videos[videosPathsEntity![i].id] = currentFolderVideosList;

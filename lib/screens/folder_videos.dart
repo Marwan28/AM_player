@@ -23,12 +23,11 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
           itemBuilder: (ctx, index) {
             print('---------- listview builder');
             return InkWell(
-              onTap: (){Navigator.pushNamed(
+              onTap: (){
+                BlocProvider.of<VideosBloc>(context).currentPlayingVideo = BlocProvider.of<VideosBloc>(context).folders_videos[BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index];
+                Navigator.pushNamed(
                 ctx,
                 AppRouter.playVideo,
-                arguments: BlocProvider.of<VideosBloc>(context).folders_videos[BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index],
-                /*BlocProvider.of<VideosBloc>(context)
-                            .videosPathsEntity![index]*/
               );},
               child: Container(
                 margin: const EdgeInsets.all(10),

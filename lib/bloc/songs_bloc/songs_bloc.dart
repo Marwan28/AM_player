@@ -3,12 +3,10 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:am_player/models/song.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:bloc/bloc.dart';
 import 'package:meta/meta.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:photo_manager/photo_manager.dart';
 
 part 'songs_event.dart';
 part 'songs_state.dart';

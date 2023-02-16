@@ -38,6 +38,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="android.allow_multiple_resumed_activities"
+            android:value="true" />
         <service
             android:name="live.exit.musicplayer.MusicPlayerService"
             android:enabled="true" />
