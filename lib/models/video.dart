@@ -11,11 +11,15 @@ class Video {
   Uint8List image;
   Uri uri;
   File file;
+  AssetEntity assetEntity;
 
-  Video(
-      {required this.title,
-      required this.path,
-      required this.duration,required this.image,required this.uri,required this.file}) {
-  }
-
+  Video({
+    required this.title,
+    required this.path,
+    required this.duration,
+    required this.image,
+    required this.uri,
+    required this.file,
+    required this.assetEntity,
+  }) {}
 }

@@ -53,6 +53,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         videosPaths?.add(file!.path);
         var m = await asset.getMediaUrl();
         print(asset.title);
+        print(asset.size.aspectRatio);
         print(asset.relativePath);
         print('mmmm ' + m!);
         print('--------file uri: ${file!.uri}');
@@ -68,6 +69,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
           image: (await asset.thumbnailData)!,
           uri: file!.uri,
           file: file,
+          assetEntity: asset,
         ));
         currentFolderVideosList.add(Video(
           title: asset.title!,
@@ -76,6 +78,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
           image: (await asset.thumbnailData)!,
           uri: file!.uri,
           file: file,
+          assetEntity: asset
         ));
         //print(' marwan\'file video path: ${file!.path}');
       }
