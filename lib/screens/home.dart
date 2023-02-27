@@ -64,7 +64,6 @@ class HomeState extends State<Home> {
   void initState() {
     super.initState();
 
-
     // refresh();
     //
     // // play pause stop
@@ -206,6 +205,30 @@ class HomeState extends State<Home> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        // bottomNavigationBar: BottomNavigationBar(
+        //   items: const [
+        //     BottomNavigationBarItem(
+        //       icon: Icon(
+        //         Icons.add,
+        //       ),
+        //       label: 'Home',
+        //     ),
+        //     BottomNavigationBarItem(
+        //       icon: Icon(
+        //         Icons.add,
+        //       ),
+        //       label: 'Home',
+        //     ),
+        //   ],
+        // ),
+        // persistentFooterButtons: const [
+        //   Text('data'),
+        //   Text('data'),
+        //   Text('data'),
+        //   Text('data'),
+        // ],
+        //drawer: Drawer(),
+        //endDrawer: Drawer(),
         appBar: AppBar(
           title: const Text('AM player'),
           bottom: const TabBar(

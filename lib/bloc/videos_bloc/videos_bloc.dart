@@ -34,7 +34,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
   loadVideos(Emitter emit) async {
     videosPathsEntity =
         await PhotoManager.getAssetPathList(type: RequestType.video);
-    print('---------- videos ----------');
+    //print('---------- videos ----------');
     videosPathsEntity!.removeAt(0);
     //print(videosPathsEntity);
     for (int i = 0; i < videosPathsEntity!.length; i++) {
@@ -43,8 +43,8 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
       //print('entity: ${videosPathsEntity![i].name} + total videos ${entity.length}');
       //entities.
       entities_lenght[videosPathsEntity![i].id] = entity.length;
-      print('-----------------------');
-      print(entities_lenght);
+      //print('-----------------------');
+      //print(entities_lenght);
 
       List<Video> currentFolderVideosList = [];
 
@@ -52,19 +52,19 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         File? file = await asset.file;
         videosPaths?.add(file!.path);
         var m = await asset.getMediaUrl();
-        print(asset.title);
-        print(asset.size.aspectRatio);
-        print(asset.relativePath);
-        print('mmmm ' + m!);
-        print('--------file uri: ${file!.uri}');
-        print('--------file path: ${file!.path}');
-        print('query ' + file.uri.path);
-        print(file.uri.scheme);
-        print(file!.path);
+        // print(asset.title);
+        // print(asset.size.aspectRatio);
+        // print(asset.relativePath);
+        // print('mmmm ' + m!);
+        // print('--------file uri: ${file!.uri}');
+        // print('--------file path: ${file!.path}');
+        // print('query ' + file.uri.path);
+        // print(file.uri.scheme);
+        // print(file!.path);
 
         allVideos?.add(Video(
           title: asset.title!,
-          path: file.path,
+          path: file!.path,
           duration: asset.duration,
           image: (await asset.thumbnailData)!,
           uri: file!.uri,
@@ -73,7 +73,7 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         ));
         currentFolderVideosList.add(Video(
           title: asset.title!,
-          path: file.path,
+          path: file!.path,
           duration: asset.duration,
           image: (await asset.thumbnailData)!,
           uri: file!.uri,
@@ -84,9 +84,9 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
       }
       folders_videos[videosPathsEntity![i].id] = currentFolderVideosList;
     }
-    print('878787878787878');
-    print(folders_videos[videosPathsEntity![0].id]);
-    print(allVideos!.length);
+    //print('878787878787878');
+    //print(folders_videos[videosPathsEntity![0].id]);
+    //print(allVideos!.length);
     emit(VideosLoadedState());
   }
 }

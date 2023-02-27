@@ -7,11 +7,20 @@ import 'package:bloc/bloc.dart';
 import 'package:meta/meta.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 part 'songs_event.dart';
 part 'songs_state.dart';
 
 class SongsBloc extends Bloc<SongsEvent, SongsState> {
+  List<AssetPathEntity>? songsPathsEntity;
+  List<String>? songsPaths;
+  List<Song>? allSongs = [];
+  final Map<String, int> entities_lenght = <String, int>{};
+  final Map<String, List<Song>> folders_songs = <String, List<Song>>{};
+  late Song currentPlayingVideo;
+
+
   SongsBloc() : super(SongsLoadingState()) {
     on<SongsEvent>((event, emit) {
     });
@@ -21,51 +30,89 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
     });
   }
 
-  List<String>? songsPaths;
-  Future<List<Song>> loadSongs(Emitter emit) async {
+  loadSongs(Emitter emit) async {
     Permission.storage.request();
-    final audioQuery = OnAudioQuery();
-    List<Song> songs = [];
-    print('marwan ------');
-    await audioQuery.queryAllPath().then((value) {
-        songsPaths = value;
+   songsPathsEntity =
+    await PhotoManager.getAssetPathList(type: RequestType.audio);
+    print('---------- songs ----------');
+    songsPathsEntity!.removeAt(0);
+    for (int i = 0; i < songsPathsEntity!.length; i++) {
+      final List<AssetEntity> entity =
+      await songsPathsEntity![i].getAssetListRange(start: 0, end: 1000);
+      //print('entity: ${videosPathsEntity![i].name} + total videos ${entity.length}');
+      //entities.
+      entities_lenght[songsPathsEntity![i].id] = entity.length;
+      print('-----------------------');
+      print(entities_lenght);
 
-      print(songsPaths);
-    });
-    await audioQuery
-        .querySongs(
-        sortType: SongSortType.TITLE,
-        uriType: UriType.EXTERNAL,
-        ignoreCase: true)
-        .then(
-          (value) {
-        for (SongModel song in value) {
-          String title = song.title;
-          String? author = song.artist;
-          title = title
-              .replaceAll(RegExp(r'\(.*\)'), '')
-              .replaceAll(RegExp(r'\[.*\]'), '');
-          //print('------marwan------');
-          //print(song.data);
-          songs.add(
-            Song(
-              title: title,
-              filePath: song.data,
-              author: author,
-              rawModel: song,
-            ),
-          );
-        }
+      List<Song> currentFolderSongsList = [];
 
-        songs.sort(
-              (a, b) =>
-              b.rawModel!.dateModified!.compareTo(a.rawModel!.dateModified!),
-        );
-      },
-    );
-    print('songs list lenght: ${songs.length}');
+      for (AssetEntity asset in entity) {
+        File? file = await asset.file;
+        songsPaths?.add(file!.path);
+        print(asset.title);
+        print(asset);
+        print(asset.relativePath);
+        print('--------file uri: ${file!.uri}');
+        print('--------file path: ${file!.path}');
+        print(file!.path);
+
+        allSongs?.add(Song(
+          title: asset.title!,
+          filePath: file.path,
+        ));
+        currentFolderSongsList.add(Song(
+            title: asset.title!,
+            filePath: file.path,
+        ));
+        //print(' marwan\'file video path: ${file!.path}');
+      }
+      folders_songs[songsPathsEntity![i].id] = currentFolderSongsList;
+    }
+    print('565656565656');
+    print(folders_songs[songsPathsEntity![0].id]);
+    print(allSongs!.length);
+    // final audioQuery = OnAudioQuery();
+    // List<Song> songs = [];
+    // print('marwan ------');
+    // await audioQuery.queryAllPath().then((value) {
+    //     songsPaths = value;
+    //
+    //   print(songsPaths);
+    // });
+    // await audioQuery
+    //     .querySongs(
+    //     sortType: SongSortType.TITLE,
+    //     uriType: UriType.EXTERNAL,
+    //     ignoreCase: true)
+    //     .then(
+    //       (value) {
+    //     for (SongModel song in value) {
+    //       String title = song.title;
+    //       String? author = song.artist;
+    //       title = title
+    //           .replaceAll(RegExp(r'\(.*\)'), '')
+    //           .replaceAll(RegExp(r'\[.*\]'), '');
+    //       //print('------marwan------');
+    //       //print(song.data);
+    //       songs.add(
+    //         Song(
+    //           title: title,
+    //           filePath: song.data,
+    //           author: author,
+    //           rawModel: song,
+    //         ),
+    //       );
+    //     }
+    //
+    //     songs.sort(
+    //           (a, b) =>
+    //           b.rawModel!.dateModified!.compareTo(a.rawModel!.dateModified!),
+    //     );
+    //   },
+    // );
+    // print('songs list lenght: ${songs.length}');
     emit(SongsLoadedState());
-    return songs;
   }
 
 
