@@ -28,6 +28,7 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
           allowBackgroundPlayback: true, mixWithOthers: true),
     )..initialize();
 
+
     videoViewer = VideoViewer(
       language: VideoViewerLanguage.en,
       style: VideoViewerStyle(
@@ -55,7 +56,7 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
           circleRadius: 40,
         ),
         forwardAndRewindStyle: ForwardAndRewindStyle(
-          bar: BarStyle.progress(),
+          bar: BarStyle.forward(),
         ),
         // settingsStyle: SettingsMenuStyle(items: [
         //   SettingsMenuItem(
