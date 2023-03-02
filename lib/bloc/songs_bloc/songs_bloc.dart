@@ -60,10 +60,12 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
         allSongs?.add(Song(
           title: asset.title!,
           filePath: file.path,
+          uri: file.uri,
         ));
         currentFolderSongsList.add(Song(
             title: asset.title!,
             filePath: file.path,
+          uri: file.uri,
         ));
         //print(' marwan\'file video path: ${file!.path}');
       }

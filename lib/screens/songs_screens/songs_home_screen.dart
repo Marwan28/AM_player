@@ -3,6 +3,8 @@ import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/screens/songs_screens/song_controls.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+
+//import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -39,7 +41,7 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
         builder: (context, state) {
           print('---------- bloc builder');
           return ListView.builder(
-            padding: EdgeInsets.only(bottom: 50),
+            //padding: EdgeInsets.only(bottom: 20),
             itemBuilder: (context, index) {
               return InkWell(
                 onTap: () async {
@@ -47,32 +49,34 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
                   //     .allSongs![index]
                   //     .filePath!);
 
-                  if(currentPlayingFilePath == BlocProvider.of<SongsBloc>(context)
-                      .allSongs![index]
-                      .filePath!){
-                    if(audioPlayer.playing){
+                  if (currentPlayingFilePath ==
+                      BlocProvider.of<SongsBloc>(context)
+                          .allSongs![index]
+                          .filePath!) {
+                    if (audioPlayer.playing) {
                       audioPlayer.pause();
-                    }else{
+                    } else {
                       audioPlayer.play();
                     }
 
-                    setState(() {
-
-                    });
-                  }else {
+                    setState(() {});
+                  } else {
                     audioPlayer.setFilePath(BlocProvider.of<SongsBloc>(context)
-                      .allSongs![index]
-                      .filePath!);
+                        .allSongs![index]
+                        .filePath!);
                     currentPlayingFilePath = BlocProvider.of<SongsBloc>(context)
                         .allSongs![index]
                         .filePath!;
-                  setState(() {
-
-                  });
-                  audioPlayer.play();
-                  setState(() {
-
-                  });}
+                    audioPlayer.setAudioSource(AudioSource.uri(
+                      BlocProvider.of<SongsBloc>(context)
+                          .allSongs![index]
+                          .uri!,
+                      tag: MediaItem(id: '1', title: 'Song Name'),
+                    ));
+                    setState(() {});
+                    audioPlayer.play();
+                    setState(() {});
+                  }
 
                   // if (audioPlayer.playing) {
                   //   await audioPlayer.pause();
@@ -110,9 +114,10 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
       //       .allSongs![0]
       //       .filePath!,
       // ),
-      floatingActionButton: Container(
+      bottomNavigationBar: Container(
         color: Colors.black,
         height: 50,
+        width: MediaQuery.of(context).size.width,
         padding: EdgeInsets.only(right: 15),
         child: Row(
           children: [
@@ -120,6 +125,18 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
               child: (!audioPlayer.playing)
                   ? IconButton(
                       onPressed: () {
+                        if (audioPlayer.duration == null) {
+                          audioPlayer.setFilePath(
+                              BlocProvider.of<SongsBloc>(context)
+                                  .allSongs![0]
+                                  .filePath!);
+                          audioPlayer.setAudioSource(AudioSource.uri(
+                              BlocProvider.of<SongsBloc>(context)
+                                  .allSongs![0]
+                                  .uri!,
+                              tag: MediaItem(id: '1', title: 'Song Name'),
+                            ));
+                        }
                         audioPlayer.play();
                         setState(() {});
                       },
@@ -173,17 +190,16 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
               ),
             ),
             StreamBuilder(
-              stream: audioPlayer.durationStream,
-              builder: (context, snapshot) {
-                var duration = snapshot.data;
-                return Text(
-                  _printDuration(duration??Duration()),
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
-                );
-              }
-            ),
+                stream: audioPlayer.durationStream,
+                builder: (context, snapshot) {
+                  var duration = snapshot.data;
+                  return Text(
+                    _printDuration(duration ?? Duration()),
+                    style: TextStyle(
+                      color: Colors.white,
+                    ),
+                  );
+                }),
           ],
         ),
       ),

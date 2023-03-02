@@ -5,13 +5,19 @@ import 'package:am_player/screens/loading.dart';
 import 'package:am_player/song_widget.dart';
 import 'package:am_player/widget.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
-void main() {
-  runApp(MyApp(
-    appRouter: AppRouter(),
-  ));
+
+Future<void> main() async {
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
+  runApp(MyApp(appRouter: AppRouter(),));
 }
+
 
 // var audioManagerInstance = AudioManager.instance;
 // bool showVol = false;
