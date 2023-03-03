@@ -12,7 +12,7 @@ class SongsHomeScreen extends StatefulWidget {
   State<SongsHomeScreen> createState() => _SongsHomeScreenState();
 }
 
-class _SongsHomeScreenState extends State<SongsHomeScreen> {
+class _SongsHomeScreenState extends State<SongsHomeScreen> with AutomaticKeepAliveClientMixin<SongsHomeScreen>{
   late AudioPlayer audioPlayer;
   int currentIndex = 0;
   String currentPath = '';
@@ -34,6 +34,8 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     return Scaffold(
       body: BlocBuilder<SongsBloc, SongsState>(
         builder: (context, state) {
@@ -119,12 +121,22 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
                     stream: audioPlayer.positionStream,
                     builder: (context, snapshot) {
                       var pos = snapshot.data;
-                      return Text(
-                        _printDuration(pos!),
-                        style: const TextStyle(
-                          color: Colors.white,
-                        ),
-                      );
+                      if(snapshot.hasData){
+                        return Text(
+                          _printDuration(pos!),
+                          style: const TextStyle(
+                            color: Colors.white,
+                          ),
+                        );
+                      }else{
+                        return Text(
+                          '00:00',
+                          style: const TextStyle(
+                            color: Colors.white,
+                          ),
+                        );
+                      }
+
                     }),
                 Expanded(
                   child: StreamBuilder(
@@ -259,4 +271,7 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> {
     }
     return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }

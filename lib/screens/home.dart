@@ -24,7 +24,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => HomeState();
 }
 
-class HomeState extends State<Home> {
+class HomeState extends State<Home>{
   List<String>? songsPaths;
   List<String>? videosPaths;
 
@@ -504,6 +504,7 @@ class HomeState extends State<Home> {
     //   ),
     // );
   }
+
 // return Scaffold(
 // appBar: AppBar(
 // title: const Text('AM player'),

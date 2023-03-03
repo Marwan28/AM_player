@@ -15,11 +15,12 @@ class VideosHomeScreen extends StatefulWidget {
   State<VideosHomeScreen> createState() => _VideosHomeScreenState();
 }
 
-class _VideosHomeScreenState extends State<VideosHomeScreen> {
+class _VideosHomeScreenState extends State<VideosHomeScreen> with AutomaticKeepAliveClientMixin<VideosHomeScreen>{
   List<Video>? videos;
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       body: BlocBuilder<VideosBloc, VideosState>(
         builder: (context, state) {
@@ -66,4 +67,7 @@ class _VideosHomeScreenState extends State<VideosHomeScreen> {
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
