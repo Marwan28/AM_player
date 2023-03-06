@@ -21,6 +21,7 @@ class _VideosHomeScreenState extends State<VideosHomeScreen> with AutomaticKeepA
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    print('---------- bloc builder build');
     return Scaffold(
       body: BlocBuilder<VideosBloc, VideosState>(
         builder: (context, state) {
@@ -56,7 +57,7 @@ class _VideosHomeScreenState extends State<VideosHomeScreen> with AutomaticKeepA
                             'Folder name: ${BlocProvider.of<VideosBloc>(context).videosPathsEntity![index].name}',
                           ),
                           Text(
-                              'number of videos: ${BlocProvider.of<VideosBloc>(context).entities_lenght[BlocProvider.of<VideosBloc>(context).videosPathsEntity![index].id]}'),
+                              'number of videos: ${BlocProvider.of<VideosBloc>(context).entities_lenght[BlocProvider.of<VideosBloc>(context).videosPathsEntity?[index]?.id]??'Loading...'}'),
                         ],
                       ),
                     ),

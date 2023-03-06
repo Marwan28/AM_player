@@ -39,17 +39,14 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
     //print(videosPathsEntity);
     for (int i = 0; i < videosPathsEntity!.length; i++) {
       final List<AssetEntity> entity =
-          await videosPathsEntity![i].getAssetListRange(start: 0, end: 1000);
-      //print('entity: ${videosPathsEntity![i].name} + total videos ${entity.length}');
-      //entities.
+          await videosPathsEntity![i].getAssetListRange(start: 0, end: 999999999);
       entities_lenght[videosPathsEntity![i].id] = entity.length;
-      //print('-----------------------');
-      //print(entities_lenght);
 
       List<Video> currentFolderVideosList = [];
 
       for (AssetEntity asset in entity) {
         File? file = await asset.file;
+        // asset.size;
         videosPaths?.add(file!.path);
         var m = await asset.getMediaUrl();
         // print(asset.title);
@@ -80,9 +77,11 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
           file: file,
           assetEntity: asset
         ));
+        emit(VideosLoadedState());
         //print(' marwan\'file video path: ${file!.path}');
       }
       folders_videos[videosPathsEntity![i].id] = currentFolderVideosList;
+      emit(VideosLoadedState());
     }
     //print('878787878787878');
     //print(folders_videos[videosPathsEntity![0].id]);

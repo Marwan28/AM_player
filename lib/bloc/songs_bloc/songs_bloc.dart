@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:meta/meta.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -34,7 +35,7 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
     songsPathsEntity!.removeAt(0);
     for (int i = 0; i < songsPathsEntity!.length; i++) {
       final List<AssetEntity> entity =
-          await songsPathsEntity![i].getAssetListRange(start: 0, end: 1000);
+          await songsPathsEntity![i].getAssetListRange(start: 0, end: 999999999);
       //print('entity: ${videosPathsEntity![i].name} + total videos ${entity.length}');
       //entities.
       entities_lenght[songsPathsEntity![i].id] = entity.length;
@@ -42,6 +43,7 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
       print(entities_lenght);
 
       List<Song> currentFolderSongsList = [];
+
 
       for (AssetEntity asset in entity) {
         File? file = await asset.file;
@@ -66,8 +68,10 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
           id: asset.id,
         ));
         //print(' marwan\'file video path: ${file!.path}');
+        emit(SongsLoadedState());
       }
       folders_songs[songsPathsEntity![i].id] = currentFolderSongsList;
+      emit(SongsLoadedState());
     }
     for (var song in allSongs!) {
       songAudioSourceList!.add(AudioSource.uri(
@@ -77,12 +81,31 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
           title: song.title!,
         ),
       ));
+      emit(SongsLoadedState());
     }
     print('565656565656');
 
 
     print(allSongs!.length);
+
+
+
+
+
+
+
     // final audioQuery = OnAudioQuery();
+    // final songsQuery = await audioQuery.querySongs();
+    // print(songsQuery[0].getMap);
+    // File file = File(songsQuery[0].getMap['_data']);
+    // print(file.uri);
+    // print(file.path);
+
+
+    print('----------');
+
+
+
     // List<Song> songs = [];
     // print('marwan ------');
     // await audioQuery.queryAllPath().then((value) {
@@ -121,7 +144,7 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
     //     );
     //   },
     // );
-    // print('songs list lenght: ${songs.length}');
+    // print('songs list length: ${songs.length}');
     emit(SongsLoadedState());
   }
 
