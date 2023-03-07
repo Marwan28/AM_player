@@ -38,8 +38,8 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
     videosPathsEntity!.removeAt(0);
     //print(videosPathsEntity);
     for (int i = 0; i < videosPathsEntity!.length; i++) {
-      final List<AssetEntity> entity =
-          await videosPathsEntity![i].getAssetListRange(start: 0, end: 999999999);
+      final List<AssetEntity> entity = await videosPathsEntity![i]
+          .getAssetListRange(start: 0, end: 999999999);
       entities_lenght[videosPathsEntity![i].id] = entity.length;
 
       List<Video> currentFolderVideosList = [];
@@ -48,7 +48,9 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         File? file = await asset.file;
         // asset.size;
         videosPaths?.add(file!.path);
-        var m = await asset.getMediaUrl();
+        print(asset.relativePath);
+        print(file!.path);
+        print(file.parent.path);
         // print(asset.title);
         // print(asset.size.aspectRatio);
         // print(asset.relativePath);
@@ -60,7 +62,11 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         // print(file!.path);
 
         allVideos?.add(Video(
-          title: asset.title!,
+          title: asset.title!
+              .replaceAll(asset.title![asset.title!.length - 1], '')
+              .replaceAll(asset.title![asset.title!.length - 2], '')
+              .replaceAll(asset.title![asset.title!.length - 3], '')
+              .replaceAll(asset.title![asset.title!.length - 4], ''),
           path: file!.path,
           duration: asset.duration,
           image: (await asset.thumbnailData)!,
@@ -69,14 +75,17 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
           assetEntity: asset,
         ));
         currentFolderVideosList.add(Video(
-          title: asset.title!,
-          path: file!.path,
-          duration: asset.duration,
-          image: (await asset.thumbnailData)!,
-          uri: file!.uri,
-          file: file,
-          assetEntity: asset
-        ));
+            title: asset.title!
+                .replaceAll(asset.title![asset.title!.length - 1], '')
+                .replaceAll(asset.title![asset.title!.length - 2], '')
+                .replaceAll(asset.title![asset.title!.length - 3], '')
+                .replaceAll(asset.title![asset.title!.length - 4], ''),
+            path: file!.path,
+            duration: asset.duration,
+            image: (await asset.thumbnailData)!,
+            uri: file!.uri,
+            file: file,
+            assetEntity: asset));
         emit(VideosLoadedState());
         //print(' marwan\'file video path: ${file!.path}');
       }

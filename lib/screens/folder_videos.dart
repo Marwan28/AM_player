@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:am_player/app_router.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -21,7 +24,7 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
     print(MediaQuery.of(context).size);
     widget.entityIndex = ModalRoute.of(context)?.settings.arguments as int;
     return Scaffold(
-      backgroundColor: Colors.cyan,
+      backgroundColor: Colors.black,
       body: BlocBuilder<VideosBloc, VideosState>(
         builder: (context, state) {
           if (BlocProvider.of<VideosBloc>(context).entities_lenght[
@@ -44,7 +47,7 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                       bottom: 5, start: 5, end: 5, top: 5),
                   //margin: EdgeInsets.only(top: 20),
                   decoration: BoxDecoration(
-                    color: Colors.red,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(width: 0.0, style: BorderStyle.none),
                   ),
@@ -62,9 +65,12 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsetsDirectional.all(10),
+                      padding: const EdgeInsetsDirectional.only(
+                        start: 10,
+                        top: 10,
+                        bottom: 10,
+                      ),
                       child: Row(
-                        textBaseline: TextBaseline.alphabetic,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           if (BlocProvider.of<VideosBloc>(context)
@@ -117,7 +123,7 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                   bottom: 5,
                                   right: 10,
                                   child: Container(
-                                    padding: EdgeInsets.all(5),
+                                    padding: const EdgeInsets.all(5),
                                     decoration: BoxDecoration(
                                       color: Colors.black.withOpacity(0.4),
                                       borderRadius: BorderRadius.circular(20),
@@ -135,29 +141,212 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                                       .id]![index]
                                               .assetEntity
                                               .videoDuration),
-                                      style: TextStyle(color: Colors.white),
+                                      style:
+                                          const TextStyle(color: Colors.white),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
                           Expanded(
-                              child: Container(
-                            margin: const EdgeInsetsDirectional.only(start: 10),
-                            child: Text(
-                              BlocProvider.of<VideosBloc>(context)
-                                      .folders_videos![
-                                          BlocProvider.of<VideosBloc>(context)
-                                              .videosPathsEntity![
-                                                  widget.entityIndex]
-                                              .id]?[index]
-                                      .title ??
-                                  '',
-                              style: const TextStyle(),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
+                            child: Container(
+                              margin:
+                                  const EdgeInsetsDirectional.only(start: 10),
+                              child: Text(
+                                BlocProvider.of<VideosBloc>(context)
+                                        .folders_videos![
+                                            BlocProvider.of<VideosBloc>(context)
+                                                .videosPathsEntity![
+                                                    widget.entityIndex]
+                                                .id]?[index]
+                                        .title ??
+                                    '',
+                                style: const TextStyle(),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          )),
+                          ),
+                          IconButton(
+                              padding: const EdgeInsets.all(0),
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.only(
+                                        topLeft: Radius.circular(20),
+                                        topRight: Radius.circular(20)),
+                                  ),
+                                  context: context,
+                                  builder: (ctx) {
+                                    return Container(
+                                      height: 100,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            child: InkWell(
+                                              onTap: () {
+                                                BlocProvider.of<VideosBloc>(
+                                                        context)
+                                                    .allVideos!
+                                                    .where((element) =>
+                                                        element.path ==
+                                                        BlocProvider.of<
+                                                                    VideosBloc>(
+                                                                context)
+                                                            .folders_videos![BlocProvider
+                                                                    .of<VideosBloc>(
+                                                                        context)
+                                                                .videosPathsEntity![
+                                                                    widget
+                                                                        .entityIndex]
+                                                                .id]?[index]
+                                                            .path);
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (dialogCtx) {
+                                                    TextEditingController
+                                                        titleController =
+                                                        TextEditingController();
+                                                    titleController
+                                                        .text = BlocProvider.of<
+                                                                    VideosBloc>(
+                                                                context)
+                                                            .folders_videos![BlocProvider
+                                                                    .of<VideosBloc>(
+                                                                        context)
+                                                                .videosPathsEntity![
+                                                                    widget
+                                                                        .entityIndex]
+                                                                .id]?[index]
+                                                            .title ??
+                                                        '';
+                                                    return AlertDialog(
+                                                      backgroundColor:
+                                                          Colors.white,
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () {
+                                                            Navigator.pop(
+                                                                context);
+                                                          },
+                                                          child: const Text(
+                                                              'Cancel'),
+                                                        ),
+                                                        TextButton(
+                                                          onPressed: () {
+                                                            BlocProvider.of<
+                                                                        VideosBloc>(
+                                                                    context)
+                                                                .folders_videos![BlocProvider.of<
+                                                                            VideosBloc>(
+                                                                        context)
+                                                                    .videosPathsEntity![
+                                                                        widget
+                                                                            .entityIndex]
+                                                                    .id]![index]
+                                                                .file
+                                                                .renameSync(
+                                                                  '${BlocProvider
+                                                                      .of<VideosBloc>(context)
+                                                                      .folders_videos!
+                                                                  [BlocProvider.of<VideosBloc>
+                                                                    (context).videosPathsEntity!
+                                                                  [widget.entityIndex].id]!
+                                                                  [index].file.parent.path}/${titleController.
+                                                                  text}.${BlocProvider
+                                                                      .of<VideosBloc>(context)
+                                                                      .folders_videos!
+                                                                  [BlocProvider.of<VideosBloc>
+                                                                    (context).videosPathsEntity!
+                                                                  [widget.entityIndex].id]!
+                                                                  [index].assetEntity.title!.
+                                                                  split('.').last}',
+                                                                );
+                                                          },
+                                                          // onPressed: () {
+                                                          //   var lastSeparator = BlocProvider
+                                                          //           .of<VideosBloc>(
+                                                          //               context)
+                                                          //       .folders_videos![BlocProvider.of<
+                                                          //                   VideosBloc>(
+                                                          //               context)
+                                                          //           .videosPathsEntity![
+                                                          //               widget
+                                                          //                   .entityIndex]
+                                                          //           .id]![index]
+                                                          //       .file
+                                                          //       .path
+                                                          //       .lastIndexOf(
+                                                          //           Platform
+                                                          //               .pathSeparator);
+                                                          //   var newPath = BlocProvider.of<
+                                                          //                   VideosBloc>(
+                                                          //               context)
+                                                          //           .folders_videos![
+                                                          //               BlocProvider.of<VideosBloc>(
+                                                          //                       context)
+                                                          //                   .videosPathsEntity![widget
+                                                          //                       .entityIndex]
+                                                          //                   .id]![
+                                                          //               index]
+                                                          //           .file
+                                                          //           .path
+                                                          //           .substring(
+                                                          //               0,
+                                                          //               lastSeparator +
+                                                          //                   1) +
+                                                          //       titleController
+                                                          //           .text;
+                                                          //   BlocProvider
+                                                          //       .of<VideosBloc>(context)
+                                                          //       .folders_videos!
+                                                          //   [BlocProvider.of<VideosBloc>
+                                                          //     (context).videosPathsEntity!
+                                                          //   [widget.entityIndex].id]!
+                                                          //   [index].file.rename(newPath);
+                                                          // },
+                                                          child: const Text(
+                                                              'Submit'),
+                                                        ),
+                                                      ],
+                                                      title: const Text(
+                                                        'Enter new Name',
+                                                        style: TextStyle(
+                                                            color:
+                                                                Colors.white),
+                                                      ),
+                                                      content: Container(
+                                                        // width: 200,
+                                                        // height: 200,
+                                                        //color: Colors.black,
+                                                        child: TextField(
+                                                          autofocus: true,
+                                                          controller:
+                                                              titleController,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                );
+                                              },
+                                              child: const Text(
+                                                'Rename',
+                                                style: TextStyle(
+                                                  fontSize: 30,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              icon: const Icon(Icons.more_vert_outlined)),
                         ],
                       ),
                     ),
