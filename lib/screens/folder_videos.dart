@@ -351,8 +351,7 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                                                     print(value.path);
                                                                   });
                                                                 } on FileSystemException catch (e) {
-                                                                  print(
-                                                                      'error');
+                                                                  print('error');
                                                                   print(e
                                                                       .message);
                                                                 }
