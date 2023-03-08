@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:meta/meta.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 part 'videos_event.dart';
@@ -32,6 +33,8 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
   }
 
   loadVideos(Emitter emit) async {
+    Permission.manageExternalStorage.request();
+    Permission.storage.request();
     videosPathsEntity =
         await PhotoManager.getAssetPathList(type: RequestType.video);
     //print('---------- videos ----------');

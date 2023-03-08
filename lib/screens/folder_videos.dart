@@ -236,7 +236,30 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                                               'Cancel'),
                                                         ),
                                                         TextButton(
-                                                          onPressed: () {
+                                                          onPressed: () async {
+                                                            try {
+                                                              await BlocProvider
+                                                                      .of<VideosBloc>(
+                                                                          context)
+                                                                  .folders_videos![BlocProvider.of<
+                                                                              VideosBloc>(
+                                                                          context)
+                                                                      .videosPathsEntity![
+                                                                          widget
+                                                                              .entityIndex]
+                                                                      .id]![index]
+                                                                  .file
+                                                                  .rename(
+                                                                    '${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].file.parent.path}/${titleController.text}.${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].assetEntity.title!.split('.').last}',
+                                                                  )
+                                                                  .then((value){
+                                                                print('done');
+                                                                print(value.path);
+                                                              });
+                                                            } on FileSystemException catch (e) {
+                                                              print('error');
+                                                              print(e.message);
+                                                            }
                                                             BlocProvider.of<
                                                                         VideosBloc>(
                                                                     context)
@@ -249,21 +272,7 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                                                     .id]![index]
                                                                 .file
                                                                 .renameSync(
-                                                                  '${BlocProvider
-                                                                      .of<VideosBloc>(context)
-                                                                      .folders_videos!
-                                                                  [BlocProvider.of<VideosBloc>
-                                                                    (context).videosPathsEntity!
-                                                                  [widget.entityIndex].id]!
-                                                                  [index].file.parent.path}/${titleController.
-                                                                  text}.${BlocProvider
-                                                                      .of<VideosBloc>(context)
-                                                                      .folders_videos!
-                                                                  [BlocProvider.of<VideosBloc>
-                                                                    (context).videosPathsEntity!
-                                                                  [widget.entityIndex].id]!
-                                                                  [index].assetEntity.title!.
-                                                                  split('.').last}',
+                                                                  '${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].file.parent.path}/${titleController.text}.${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].assetEntity.title!.split('.').last}',
                                                                 );
                                                           },
                                                           // onPressed: () {
