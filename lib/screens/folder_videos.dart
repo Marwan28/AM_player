@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:am_player/app_router.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
+import 'package:file_manager/file_manager.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -179,6 +180,9 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                   context: context,
                                   builder: (ctx) {
                                     return Container(
+                                      padding: EdgeInsetsDirectional.only(
+                                        top: 10,
+                                      ),
                                       height: 100,
                                       child: Column(
                                         crossAxisAlignment:
@@ -252,71 +256,16 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                                                   .rename(
                                                                     '${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].file.parent.path}/${titleController.text}.${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].assetEntity.title!.split('.').last}',
                                                                   )
-                                                                  .then((value){
+                                                                  .then((value) {
                                                                 print('done');
-                                                                print(value.path);
+                                                                print(
+                                                                    value.path);
                                                               });
                                                             } on FileSystemException catch (e) {
                                                               print('error');
                                                               print(e.message);
                                                             }
-                                                            BlocProvider.of<
-                                                                        VideosBloc>(
-                                                                    context)
-                                                                .folders_videos![BlocProvider.of<
-                                                                            VideosBloc>(
-                                                                        context)
-                                                                    .videosPathsEntity![
-                                                                        widget
-                                                                            .entityIndex]
-                                                                    .id]![index]
-                                                                .file
-                                                                .renameSync(
-                                                                  '${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].file.parent.path}/${titleController.text}.${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].assetEntity.title!.split('.').last}',
-                                                                );
                                                           },
-                                                          // onPressed: () {
-                                                          //   var lastSeparator = BlocProvider
-                                                          //           .of<VideosBloc>(
-                                                          //               context)
-                                                          //       .folders_videos![BlocProvider.of<
-                                                          //                   VideosBloc>(
-                                                          //               context)
-                                                          //           .videosPathsEntity![
-                                                          //               widget
-                                                          //                   .entityIndex]
-                                                          //           .id]![index]
-                                                          //       .file
-                                                          //       .path
-                                                          //       .lastIndexOf(
-                                                          //           Platform
-                                                          //               .pathSeparator);
-                                                          //   var newPath = BlocProvider.of<
-                                                          //                   VideosBloc>(
-                                                          //               context)
-                                                          //           .folders_videos![
-                                                          //               BlocProvider.of<VideosBloc>(
-                                                          //                       context)
-                                                          //                   .videosPathsEntity![widget
-                                                          //                       .entityIndex]
-                                                          //                   .id]![
-                                                          //               index]
-                                                          //           .file
-                                                          //           .path
-                                                          //           .substring(
-                                                          //               0,
-                                                          //               lastSeparator +
-                                                          //                   1) +
-                                                          //       titleController
-                                                          //           .text;
-                                                          //   BlocProvider
-                                                          //       .of<VideosBloc>(context)
-                                                          //       .folders_videos!
-                                                          //   [BlocProvider.of<VideosBloc>
-                                                          //     (context).videosPathsEntity!
-                                                          //   [widget.entityIndex].id]!
-                                                          //   [index].file.rename(newPath);
-                                                          // },
                                                           child: const Text(
                                                               'Submit'),
                                                         ),
@@ -344,7 +293,156 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                                               child: const Text(
                                                 'Rename',
                                                 style: TextStyle(
-                                                  fontSize: 30,
+                                                  fontSize: 20,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: EdgeInsets.all(10),
+                                            child: InkWell(
+                                              onTap: () {
+                                                showDialog(
+                                                    context: context,
+                                                    builder: (ctx) {
+                                                      final FileManagerController
+                                                          controller =
+                                                          FileManagerController();
+                                                      return AlertDialog(
+                                                        actions: [
+                                                          TextButton(
+                                                              onPressed: () {
+                                                                Navigator.pop(
+                                                                    context);
+                                                              },
+                                                              child: Text(
+                                                                  'Cancel')),
+                                                          TextButton(
+                                                              onPressed:
+                                                                  () async {
+                                                                try {
+                                                                  await BlocProvider.of<
+                                                                              VideosBloc>(
+                                                                          context)
+                                                                      .folders_videos![
+                                                                          BlocProvider.of<VideosBloc>(context)
+                                                                              .videosPathsEntity![widget
+                                                                                  .entityIndex]
+                                                                              .id]![
+                                                                          index]
+                                                                      .file
+                                                                      .copy(
+                                                                          '${controller.getCurrentPath}/${BlocProvider
+                                                                              .of<VideosBloc>(context)
+                                                                              .folders_videos!
+                                                                          [BlocProvider.of<VideosBloc>(context).
+                                                                          videosPathsEntity![widget.entityIndex].id]!
+                                                                          [index].title}.${BlocProvider
+                                                                              .of<VideosBloc>(context)
+                                                                              .folders_videos!
+                                                                          [BlocProvider.of<VideosBloc>(context)
+                                                                              .videosPathsEntity![widget.entityIndex].id]!
+                                                                          [index].assetEntity.title!.
+                                                                          split('.').last}')
+                                                                      .then(
+                                                                          (value) {
+                                                                    print(
+                                                                        'done');
+                                                                    print(value.path);
+                                                                  });
+                                                                } on FileSystemException catch (e) {
+                                                                  print(
+                                                                      'error');
+                                                                  print(e
+                                                                      .message);
+                                                                }
+                                                              },
+                                                              child: Text(
+                                                                  'Submit')),
+                                                        ],
+                                                        title: Row(
+                                                          children: [
+                                                            IconButton(
+                                                                onPressed: () {
+                                                                  controller
+                                                                      .goToParentDirectory();
+                                                                },
+                                                                icon: Icon(Icons
+                                                                    .arrow_back)),
+                                                          ],
+                                                        ),
+                                                        content: FileManager(
+                                                          controller:
+                                                              controller,
+                                                          builder: (context,
+                                                              snapshot) {
+                                                            final List<
+                                                                    FileSystemEntity>
+                                                                entities =
+                                                                snapshot.where(
+                                                                    (element) {
+                                                              return FileManager
+                                                                  .isDirectory(
+                                                                      element);
+                                                            }).toList();
+                                                            print('mmmmmmmmmm');
+                                                            print(controller
+                                                                .getCurrentPath);
+                                                            return Center(
+                                                              child: Container(
+                                                                width: MediaQuery.of(
+                                                                            context)
+                                                                        .size
+                                                                        .width *
+                                                                    0.60,
+                                                                height: MediaQuery.of(
+                                                                            context)
+                                                                        .size
+                                                                        .height *
+                                                                    0.60,
+                                                                child: ListView
+                                                                    .builder(
+                                                                  itemCount:
+                                                                      entities
+                                                                          .length,
+                                                                  itemBuilder:
+                                                                      (context,
+                                                                          index) {
+                                                                    return Card(
+                                                                      child:
+                                                                          ListTile(
+                                                                        leading: FileManager.isFile(entities[index])
+                                                                            ? Icon(Icons.feed_outlined)
+                                                                            : Icon(Icons.folder),
+                                                                        title: Text(
+                                                                            FileManager.basename(entities[index])),
+                                                                        onTap:
+                                                                            () {
+                                                                          if (FileManager.isDirectory(
+                                                                              entities[index])) {
+                                                                            controller.openDirectory(entities[index]);
+                                                                            // print('mmmmmmmmmm');
+                                                                            // print(controller.getCurrentPath);
+                                                                            //controller.goToParentDirectory();// open directory
+                                                                          } else {
+                                                                            // Perform file-related tasks.
+                                                                          }
+                                                                        },
+                                                                      ),
+                                                                    );
+                                                                  },
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      );
+                                                    });
+                                              },
+                                              child: Text(
+                                                'Copy',
+                                                style: TextStyle(
+                                                  fontSize: 20,
                                                 ),
                                               ),
                                             ),

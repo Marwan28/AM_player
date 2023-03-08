@@ -28,6 +28,7 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
   }
 
   loadSongs(Emitter emit) async {
+    Permission.manageExternalStorage.request();
     Permission.storage.request();
     songsPathsEntity =
         await PhotoManager.getAssetPathList(type: RequestType.audio);
