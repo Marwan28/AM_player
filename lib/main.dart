@@ -978,3 +978,170 @@ class MyApp extends StatelessWidget {
         ),
       );
     }*/
+
+
+
+
+
+
+
+
+
+
+
+/*
+from chat GPT
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Device Media',
+      home: DeviceMediaScreen(),
+    );
+  }
+}
+
+class DeviceMediaScreen extends StatefulWidget {
+  @override
+  _DeviceMediaScreenState createState() => _DeviceMediaScreenState();
+}
+
+class _DeviceMediaScreenState extends State<DeviceMediaScreen> {
+  List<AssetEntity> _photos = [];
+  List<AssetEntity> _videos = [];
+  List<AssetEntity> _audios = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _getMedia();
+  }
+
+  Future<void> _getMedia() async {
+    // Request permission to access device media
+    // final permissionStatus = await PhotoManager.requestPermission();
+    // if (permissionStatus != PermissionStatus.authorized) {
+    //   return;
+    // }
+
+    // Load all the photos, videos, and audios on the device
+    final List<AssetPathEntity> albums =
+        await PhotoManager.getAssetPathList(type: RequestType.all);
+    for (final album in albums) {
+      if (album.isAll) {
+        final photos = await album.getAssetListPaged(page:0, size:album.assetCount);
+        _photos.addAll(photos.where((e) => e.type == AssetType.image));
+        _videos.addAll(photos.where((e) => e.type == AssetType.video));
+        _audios.addAll(photos.where((e) => e.type == AssetType.audio));
+        break;
+      }
+    }
+
+    // Refresh the UI to show the loaded media
+    setState(() {});
+    print(_photos.length);
+    print(_videos.length);
+    print(_audios.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Device Media'),
+          bottom: TabBar(
+            tabs: [
+              Tab(text: 'Photos'),
+              Tab(text: 'Videos'),
+              Tab(text: 'Audios'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _photos.isEmpty
+                ? Center(child: CircularProgressIndicator())
+                : GridView.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      childAspectRatio: 1.0,
+                    ),
+                    itemCount: _photos.length,
+                    itemBuilder: (context, index) =>
+                        _buildAssetThumbnail(_photos[index]),
+                  ),
+            _videos.isEmpty
+                ? Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: _videos.length,
+                    itemBuilder: (context, index) => ListTile(
+                      leading: FutureBuilder<Uint8List?>(
+                        future: _videos[index].thumbnailDataWithSize(ThumbnailSize(120, 120)),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                                  ConnectionState.done &&
+                              snapshot.data != null) {
+                            return Image.memory(snapshot.data!);
+                          }
+                          return SizedBox.shrink();
+                        },
+                      ),
+                      title: Text(_videos[index].title ?? ''),
+                      onTap: () {
+                        // Handle video selection
+                        // ...
+                      },
+                    ),
+                  ),
+            _audios.isEmpty
+                ? Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: _audios.length,
+                    itemBuilder: (context, index) => ListTile(
+                      leading: Icon(Icons.audiotrack),
+                      title: Text(_audios[index].title ?? ''),
+                      onTap: () {
+// Handle audio selection
+// ...
+                      },
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssetThumbnail(AssetEntity asset) {
+    return FutureBuilder<Uint8List?>(
+      future: asset.thumbnailDataWithSize(ThumbnailSize(120, 120)),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.data != null) {
+          return GestureDetector(
+            onTap: () {
+// Handle photo selection
+// ...
+            },
+            child: Image.memory(snapshot.data!),
+          );
+        }
+        return SizedBox.shrink();
+      },
+    );
+  }
+}
+
+*
+* */
