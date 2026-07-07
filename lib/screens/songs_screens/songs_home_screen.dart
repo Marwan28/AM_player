@@ -1,5 +1,4 @@
 import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,17 +11,20 @@ class SongsHomeScreen extends StatefulWidget {
   State<SongsHomeScreen> createState() => _SongsHomeScreenState();
 }
 
-class _SongsHomeScreenState extends State<SongsHomeScreen> with AutomaticKeepAliveClientMixin<SongsHomeScreen>{
+class _SongsHomeScreenState extends State<SongsHomeScreen>
+    with AutomaticKeepAliveClientMixin<SongsHomeScreen> {
   late AudioPlayer audioPlayer;
   int currentIndex = 0;
   String currentPath = '';
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     audioPlayer = AudioPlayer();
     audioPlayer.setLoopMode(LoopMode.all);
+    if (context.read<SongsBloc>().allSongs?.isEmpty ?? true) {
+      context.read<SongsBloc>().add(LoadSongsEvent());
+    }
   }
 
   @override
@@ -69,8 +71,7 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> with AutomaticKeepAli
                         .filePath!;
                     audioPlayer.setAudioSource(
                         ConcatenatingAudioSource(
-                            children:
-                            BlocProvider.of<SongsBloc>(context)
+                            children: BlocProvider.of<SongsBloc>(context)
                                 .songAudioSourceList!),
                         initialIndex: currentIndex);
                     audioPlayer.play();
@@ -121,14 +122,14 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> with AutomaticKeepAli
                     stream: audioPlayer.positionStream,
                     builder: (context, snapshot) {
                       var pos = snapshot.data;
-                      if(snapshot.hasData){
+                      if (snapshot.hasData) {
                         return Text(
                           _printDuration(pos!),
                           style: const TextStyle(
                             color: Colors.white,
                           ),
                         );
-                      }else{
+                      } else {
                         return Text(
                           '00:00',
                           style: const TextStyle(
@@ -136,7 +137,6 @@ class _SongsHomeScreenState extends State<SongsHomeScreen> with AutomaticKeepAli
                           ),
                         );
                       }
-
                     }),
                 Expanded(
                   child: StreamBuilder(

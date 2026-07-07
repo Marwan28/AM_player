@@ -1,23 +1,20 @@
 import 'package:am_player/app_router.dart';
-import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
-import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
-import 'package:am_player/screens/loading.dart';
-import 'package:am_player/song_widget.dart';
-import 'package:am_player/widget.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'package:on_audio_query/on_audio_query.dart';
-
+import 'package:media_kit/media_kit.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
     androidNotificationChannelName: 'Audio playback',
     androidNotificationOngoing: true,
   );
-  runApp(MyApp(appRouter: AppRouter(),));
+  runApp(MyApp(
+    appRouter: AppRouter(),
+  ));
 }
-
 
 // var audioManagerInstance = AudioManager.instance;
 // bool showVol = false;
@@ -289,14 +286,6 @@ class MyApp extends StatelessWidget {
   //   );
   // }
 }
-
-
-
-
-
-
-
-
 
 /*
 *  import 'dart:async';
@@ -978,16 +967,6 @@ class MyApp extends StatelessWidget {
         ),
       );
     }*/
-
-
-
-
-
-
-
-
-
-
 
 /*
 from chat GPT

@@ -1,31 +1,21 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:am_player/app_router.dart';
-import 'package:flutter/material.dart';
+import 'package:am_player/models/video_item.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:am_player/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp(appRouter: AppRouter(),));
+  test('VideoItem exposes a clean display title without extension', () {
+    const item = VideoItem(
+      assetId: '1',
+      title: 'Movie.Sample.mp4',
+      path: '/storage/emulated/0/Movies/Movie.Sample.mp4',
+      folderId: 'movies',
+      folderName: 'Movies',
+      durationMs: 1000,
+      modifiedMs: 1000,
+      width: 1920,
+      height: 1080,
+      sizeBytes: 1024,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(item.displayTitle, 'Movie.Sample');
   });
 }

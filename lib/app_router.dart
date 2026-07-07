@@ -6,10 +6,8 @@ import 'package:am_player/screens/loading.dart';
 import 'package:am_player/screens/songs_screens/songs_home_screen.dart';
 import 'package:am_player/screens/videos_screens/play_video.dart';
 import 'package:am_player/screens/videos_screens/videos_home_screen.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
 
 class AppRouter {
   VideosBloc videosBloc = VideosBloc();
@@ -20,7 +18,6 @@ class AppRouter {
   static String home = '/home';
   static String folderVideos = '/folderVideos';
   static String playVideo = '/playVideo';
-
 
   Route? generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -48,13 +45,13 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (context) => BlocProvider<VideosBloc>.value(
             value: videosBloc,
-            child: VideosHomeScreen(),
+            child: const VideosHomeScreen(),
           ),
         );
       case '/songsHome':
         return MaterialPageRoute(
           builder: (context) => BlocProvider<SongsBloc>.value(
-            value:  songsBloc,
+            value: songsBloc,
             child: SongsHomeScreen(),
           ),
         );
@@ -62,15 +59,15 @@ class AppRouter {
         return MaterialPageRoute(
           settings: settings,
           builder: (context) => BlocProvider<VideosBloc>.value(
-            value:  videosBloc,
-            child: FolderVideosScreen(),
+            value: videosBloc,
+            child: const FolderVideosScreen(),
           ),
         );
       case '/playVideo':
         return MaterialPageRoute(
           settings: settings,
           builder: (context) => BlocProvider<VideosBloc>.value(
-            value:  videosBloc,
+            value: videosBloc,
             child: PlayVideoScreen(),
           ),
         );

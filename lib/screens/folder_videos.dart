@@ -1,484 +1,244 @@
-import 'dart:io';
-
 import 'package:am_player/app_router.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
-import 'package:file_manager/file_manager.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:am_player/models/video_folder.dart';
+import 'package:am_player/models/video_item.dart';
+import 'package:am_player/widgets/video_thumbnail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class FolderVideosScreen extends StatefulWidget {
-  FolderVideosScreen({
-    Key? key,
-  }) : super(key: key);
-  late int entityIndex;
+  const FolderVideosScreen({Key? key}) : super(key: key);
 
   @override
   State<FolderVideosScreen> createState() => _FolderVideosScreenState();
 }
 
 class _FolderVideosScreenState extends State<FolderVideosScreen> {
+  VideoFolder? folder;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is VideoFolder && folder?.id != args.id) {
+      folder = args;
+      context.read<VideosBloc>().add(OpenVideoFolderEvent(args.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    print(MediaQuery.of(context).size.height);
-    print(MediaQuery.of(context).size.width);
-    print(MediaQuery.of(context).size);
-    widget.entityIndex = ModalRoute.of(context)?.settings.arguments as int;
+    final currentFolder = folder;
+    if (currentFolder == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0F1115),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF14171D),
+        title: Text(
+          currentFolder.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: () {
+              context.read<VideosBloc>().add(const RefreshVideosEvent());
+              context
+                  .read<VideosBloc>()
+                  .add(OpenVideoFolderEvent(currentFolder.id));
+            },
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
       body: BlocBuilder<VideosBloc, VideosState>(
         builder: (context, state) {
-          if (BlocProvider.of<VideosBloc>(context).entities_lenght[
-                      BlocProvider.of<VideosBloc>(context)
-                          .videosPathsEntity![widget.entityIndex]
-                          .id] ==
-                  null ||
-              BlocProvider.of<VideosBloc>(context).entities_lenght[
-                      BlocProvider.of<VideosBloc>(context)
-                          .videosPathsEntity![widget.entityIndex]
-                          .id] ==
-                  0) {
-            return const Center(child: CircularProgressIndicator());
-          } else {
-            return ListView.builder(
-              itemBuilder: (ctx, index) {
-                print('---------- listview builder');
-                return Container(
-                  margin: const EdgeInsetsDirectional.only(
-                      bottom: 5, start: 5, end: 5, top: 5),
-                  //margin: EdgeInsets.only(top: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(width: 0.0, style: BorderStyle.none),
-                  ),
+          final videos = state.videosForFolder(currentFolder.id);
 
-                  child: InkWell(
-                    onTap: () {
-                      BlocProvider.of<VideosBloc>(context).currentPlayingVideo =
-                          BlocProvider.of<VideosBloc>(context).folders_videos[
-                              BlocProvider.of<VideosBloc>(context)
-                                  .videosPathsEntity![widget.entityIndex]
-                                  .id]![index];
-                      Navigator.pushNamed(
-                        ctx,
-                        AppRouter.playVideo,
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsetsDirectional.only(
-                        start: 10,
-                        top: 10,
-                        bottom: 10,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (BlocProvider.of<VideosBloc>(context)
-                                  .folders_videos[BlocProvider.of<VideosBloc>(
-                                          context)
-                                      .videosPathsEntity![widget.entityIndex]
-                                      .id]?[index]
-                                  .image ==
-                              null)
-                            Container(
-                              width: MediaQuery.of(context).size.width * 0.300,
-                              height:
-                                  MediaQuery.of(context).size.height * 0.100,
-                              child: Image.asset('assets/images/image2.png'),
-                            ),
-                          if (BlocProvider.of<VideosBloc>(context)
-                                  .folders_videos[BlocProvider.of<VideosBloc>(
-                                          context)
-                                      .videosPathsEntity![widget.entityIndex]
-                                      .id]?[index]
-                                  .image !=
-                              null)
-                            Stack(
-                              fit: StackFit.loose,
-                              alignment: Alignment.bottomRight,
-                              children: [
-                                Container(
-                                  decoration: const BoxDecoration(),
-                                  width:
-                                      MediaQuery.of(context).size.width * 0.300,
-                                  height: MediaQuery.of(context).size.height *
-                                      0.100,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(20),
-                                    //clipBehavior: Clip.hardEdge,
-                                    child: Image.memory(
-                                      BlocProvider.of<VideosBloc>(context)
-                                          .folders_videos[
-                                              BlocProvider.of<VideosBloc>(
-                                                      context)
-                                                  .videosPathsEntity![
-                                                      widget.entityIndex]
-                                                  .id]![index]
-                                          .image,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 5,
-                                  right: 10,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.4),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                          width: 0.0, style: BorderStyle.none),
-                                    ),
-                                    child: Text(
-                                      _printDuration(
-                                          BlocProvider.of<VideosBloc>(context)
-                                              .folders_videos[
-                                                  BlocProvider.of<VideosBloc>(
-                                                          context)
-                                                      .videosPathsEntity![
-                                                          widget.entityIndex]
-                                                      .id]![index]
-                                              .assetEntity
-                                              .videoDuration),
-                                      style:
-                                          const TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          Expanded(
-                            child: Container(
-                              margin:
-                                  const EdgeInsetsDirectional.only(start: 10),
-                              child: Text(
-                                BlocProvider.of<VideosBloc>(context)
-                                        .folders_videos![
-                                            BlocProvider.of<VideosBloc>(context)
-                                                .videosPathsEntity![
-                                                    widget.entityIndex]
-                                                .id]?[index]
-                                        .title ??
-                                    '',
-                                style: const TextStyle(),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                              padding: const EdgeInsets.all(0),
-                              onPressed: () {
-                                showModalBottomSheet(
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.only(
-                                        topLeft: Radius.circular(20),
-                                        topRight: Radius.circular(20)),
-                                  ),
-                                  context: context,
-                                  builder: (ctx) {
-                                    return Container(
-                                      padding: EdgeInsetsDirectional.only(
-                                        top: 10,
-                                      ),
-                                      height: 100,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(10),
-                                            child: InkWell(
-                                              onTap: () {
-                                                BlocProvider.of<VideosBloc>(
-                                                        context)
-                                                    .allVideos!
-                                                    .where((element) =>
-                                                        element.path ==
-                                                        BlocProvider.of<
-                                                                    VideosBloc>(
-                                                                context)
-                                                            .folders_videos![BlocProvider
-                                                                    .of<VideosBloc>(
-                                                                        context)
-                                                                .videosPathsEntity![
-                                                                    widget
-                                                                        .entityIndex]
-                                                                .id]?[index]
-                                                            .path);
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (dialogCtx) {
-                                                    TextEditingController
-                                                        titleController =
-                                                        TextEditingController();
-                                                    titleController
-                                                        .text = BlocProvider.of<
-                                                                    VideosBloc>(
-                                                                context)
-                                                            .folders_videos![BlocProvider
-                                                                    .of<VideosBloc>(
-                                                                        context)
-                                                                .videosPathsEntity![
-                                                                    widget
-                                                                        .entityIndex]
-                                                                .id]?[index]
-                                                            .title ??
-                                                        '';
-                                                    return AlertDialog(
-                                                      backgroundColor:
-                                                          Colors.white,
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () {
-                                                            Navigator.pop(
-                                                                context);
-                                                          },
-                                                          child: const Text(
-                                                              'Cancel'),
-                                                        ),
-                                                        TextButton(
-                                                          onPressed: () async {
-                                                            try {
-                                                              await BlocProvider
-                                                                      .of<VideosBloc>(
-                                                                          context)
-                                                                  .folders_videos![BlocProvider.of<
-                                                                              VideosBloc>(
-                                                                          context)
-                                                                      .videosPathsEntity![
-                                                                          widget
-                                                                              .entityIndex]
-                                                                      .id]![index]
-                                                                  .file
-                                                                  .rename(
-                                                                    '${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].file.parent.path}/${titleController.text}.${BlocProvider.of<VideosBloc>(context).folders_videos![BlocProvider.of<VideosBloc>(context).videosPathsEntity![widget.entityIndex].id]![index].assetEntity.title!.split('.').last}',
-                                                                  )
-                                                                  .then((value) {
-                                                                print('done');
-                                                                print(
-                                                                    value.path);
-                                                              });
-                                                            } on FileSystemException catch (e) {
-                                                              print('error');
-                                                              print(e.message);
-                                                            }
-                                                          },
-                                                          child: const Text(
-                                                              'Submit'),
-                                                        ),
-                                                      ],
-                                                      title: const Text(
-                                                        'Enter new Name',
-                                                        style: TextStyle(
-                                                            color:
-                                                                Colors.white),
-                                                      ),
-                                                      content: Container(
-                                                        // width: 200,
-                                                        // height: 200,
-                                                        //color: Colors.black,
-                                                        child: TextField(
-                                                          autofocus: true,
-                                                          controller:
-                                                              titleController,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                              child: const Text(
-                                                'Rename',
-                                                style: TextStyle(
-                                                  fontSize: 20,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: EdgeInsets.all(10),
-                                            child: InkWell(
-                                              onTap: () {
-                                                showDialog(
-                                                    context: context,
-                                                    builder: (ctx) {
-                                                      final FileManagerController
-                                                          controller =
-                                                          FileManagerController();
-                                                      return AlertDialog(
-                                                        actions: [
-                                                          TextButton(
-                                                              onPressed: () {
-                                                                Navigator.pop(
-                                                                    context);
-                                                              },
-                                                              child: Text(
-                                                                  'Cancel')),
-                                                          TextButton(
-                                                              onPressed:
-                                                                  () async {
-                                                                try {
-                                                                  await BlocProvider.of<
-                                                                              VideosBloc>(
-                                                                          context)
-                                                                      .folders_videos![
-                                                                          BlocProvider.of<VideosBloc>(context)
-                                                                              .videosPathsEntity![widget
-                                                                                  .entityIndex]
-                                                                              .id]![
-                                                                          index]
-                                                                      .file
-                                                                      .copy(
-                                                                          '${controller.getCurrentPath}/${BlocProvider
-                                                                              .of<VideosBloc>(context)
-                                                                              .folders_videos!
-                                                                          [BlocProvider.of<VideosBloc>(context).
-                                                                          videosPathsEntity![widget.entityIndex].id]!
-                                                                          [index].title}.${BlocProvider
-                                                                              .of<VideosBloc>(context)
-                                                                              .folders_videos!
-                                                                          [BlocProvider.of<VideosBloc>(context)
-                                                                              .videosPathsEntity![widget.entityIndex].id]!
-                                                                          [index].assetEntity.title!.
-                                                                          split('.').last}')
-                                                                      .then(
-                                                                          (value) {
-                                                                    print(
-                                                                        'done');
-                                                                    print(value.path);
-                                                                  });
-                                                                } on FileSystemException catch (e) {
-                                                                  print('error');
-                                                                  print(e
-                                                                      .message);
-                                                                }
-                                                              },
-                                                              child: Text(
-                                                                  'Submit')),
-                                                        ],
-                                                        title: Row(
-                                                          children: [
-                                                            IconButton(
-                                                                onPressed: () {
-                                                                  controller
-                                                                      .goToParentDirectory();
-                                                                },
-                                                                icon: Icon(Icons
-                                                                    .arrow_back)),
-                                                          ],
-                                                        ),
-                                                        content: FileManager(
-                                                          controller:
-                                                              controller,
-                                                          builder: (context,
-                                                              snapshot) {
-                                                            final List<
-                                                                    FileSystemEntity>
-                                                                entities =
-                                                                snapshot.where(
-                                                                    (element) {
-                                                              return FileManager
-                                                                  .isDirectory(
-                                                                      element);
-                                                            }).toList();
-                                                            print('mmmmmmmmmm');
-                                                            print(controller
-                                                                .getCurrentPath);
-                                                            return Center(
-                                                              child: Container(
-                                                                width: MediaQuery.of(
-                                                                            context)
-                                                                        .size
-                                                                        .width *
-                                                                    0.60,
-                                                                height: MediaQuery.of(
-                                                                            context)
-                                                                        .size
-                                                                        .height *
-                                                                    0.60,
-                                                                child: ListView
-                                                                    .builder(
-                                                                  itemCount:
-                                                                      entities
-                                                                          .length,
-                                                                  itemBuilder:
-                                                                      (context,
-                                                                          index) {
-                                                                    return Card(
-                                                                      child:
-                                                                          ListTile(
-                                                                        leading: FileManager.isFile(entities[index])
-                                                                            ? Icon(Icons.feed_outlined)
-                                                                            : Icon(Icons.folder),
-                                                                        title: Text(
-                                                                            FileManager.basename(entities[index])),
-                                                                        onTap:
-                                                                            () {
-                                                                          if (FileManager.isDirectory(
-                                                                              entities[index])) {
-                                                                            controller.openDirectory(entities[index]);
-                                                                            // print('mmmmmmmmmm');
-                                                                            // print(controller.getCurrentPath);
-                                                                            //controller.goToParentDirectory();// open directory
-                                                                          } else {
-                                                                            // Perform file-related tasks.
-                                                                          }
-                                                                        },
-                                                                      ),
-                                                                    );
-                                                                  },
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                      );
-                                                    });
-                                              },
-                                              child: Text(
-                                                'Copy',
-                                                style: TextStyle(
-                                                  fontSize: 20,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                              icon: const Icon(Icons.more_vert_outlined)),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-              itemCount: BlocProvider.of<VideosBloc>(context).entities_lenght[
-                      BlocProvider.of<VideosBloc>(context)
-                          .videosPathsEntity![widget.entityIndex]
-                          .id] ??
-                  0,
-            );
+          if (videos.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
           }
+
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: videos.length,
+            separatorBuilder: (_, __) => const Divider(
+              height: 1,
+              indent: 116,
+              color: Color(0xFF262A33),
+            ),
+            itemBuilder: (ctx, index) {
+              return _VideoRow(video: videos[index]);
+            },
+          );
         },
       ),
     );
   }
+}
 
-  String _printDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    if (twoDigits(duration.inHours) == '0' ||
-        twoDigits(duration.inHours) == '00') {
-      return "$twoDigitMinutes:$twoDigitSeconds";
-    }
-    return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
+class _VideoRow extends StatelessWidget {
+  final VideoItem video;
+
+  const _VideoRow({required this.video});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      leading: SizedBox(
+        width: 92,
+        height: 58,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            VideoThumbnail(
+              assetId: video.assetId,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.68),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  child: Text(
+                    _formatDuration(video.duration),
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      title: Text(
+        video.displayTitle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        _formatSize(video.sizeBytes),
+        style: const TextStyle(color: Colors.white54),
+      ),
+      trailing: IconButton(
+        color: Colors.white70,
+        icon: const Icon(Icons.more_vert),
+        onPressed: () => _showVideoActions(context, video),
+      ),
+      onTap: () {
+        context.read<VideosBloc>().add(SelectVideoEvent(video));
+        Navigator.pushNamed(context, AppRouter.playVideo);
+      },
+    );
+  }
+
+  void _showVideoActions(BuildContext context, VideoItem video) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1D24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                iconColor: Colors.white,
+                textColor: Colors.white,
+                title: const Text('Rename'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showRenameDialog(context, video);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                iconColor: Colors.white,
+                textColor: Colors.white,
+                title: const Text('Details'),
+                subtitle: Text(
+                  video.path,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showRenameDialog(BuildContext context, VideoItem video) {
+    final controller = TextEditingController(text: video.displayTitle);
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename video'),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                context.read<VideosBloc>().add(
+                      RenameVideoEvent(
+                        video: video,
+                        newBaseName: controller.text,
+                      ),
+                    );
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    if (hours == 0) return '$minutes:$seconds';
+    return '${twoDigits(hours)}:$minutes:$seconds';
+  }
+
+  static String _formatSize(int bytes) {
+    if (bytes <= 0) return '';
+    final mb = bytes / (1024 * 1024);
+    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
+    return '${(mb / 1024).toStringAsFixed(1)} GB';
   }
 }

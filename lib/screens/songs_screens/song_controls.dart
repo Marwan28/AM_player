@@ -1,6 +1,4 @@
-import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:just_audio/just_audio.dart';
 
 class SongControls extends StatefulWidget {

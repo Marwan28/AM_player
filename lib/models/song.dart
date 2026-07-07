@@ -1,5 +1,3 @@
-import 'package:on_audio_query/on_audio_query.dart';
-
 class Song {
   final String? filePath;
   final String? title;

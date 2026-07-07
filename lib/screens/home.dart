@@ -1,21 +1,8 @@
 import 'dart:io';
 
-import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
-import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
-import 'package:am_player/main.dart';
-import 'package:am_player/models/song.dart';
 import 'package:am_player/screens/songs_screens/songs_home_screen.dart';
 import 'package:am_player/screens/videos_screens/videos_home_screen.dart';
-import 'package:am_player/song_player.dart';
-import 'package:am_player/widgets/song_row.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:on_audio_query/on_audio_query.dart';
-import 'package:page_transition/page_transition.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:photo_manager/photo_manager.dart';
 
 class Home extends StatefulWidget {
   const Home({Key? key}) : super(key: key);
@@ -24,7 +11,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => HomeState();
 }
 
-class HomeState extends State<Home>{
+class HomeState extends State<Home> {
   List<String>? songsPaths;
   List<String>? videosPaths;
 
@@ -56,7 +43,6 @@ class HomeState extends State<Home>{
   //Duration duration = Duration.zero;
   // position = Duration.zero;
   TextEditingController searchController = TextEditingController();
-  final audioPlayer = AudioPlayer();
 
   //List<AssetPathEntity>? videosPathsEntity;
 
