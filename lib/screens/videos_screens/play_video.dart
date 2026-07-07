@@ -3,7 +3,6 @@ import 'package:am_player/models/video.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:video_player/video_player.dart';
-import 'package:video_viewer/video_viewer.dart';
 
 class PlayVideoScreen extends StatefulWidget {
   const PlayVideoScreen({Key? key}) : super(key: key);
@@ -14,9 +13,9 @@ class PlayVideoScreen extends StatefulWidget {
 
 class _PlayVideoScreenState extends State<PlayVideoScreen> {
   late Video video;
-  final VideoViewerController videoViewerController = VideoViewerController();
-  late VideoViewer videoViewer;
   late VideoPlayerController videoPlayerController;
+  late Future<void> initializeVideoFuture;
+  bool showControls = true;
 
   @override
   void initState() {
@@ -26,87 +25,119 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
       video.file,
       videoPlayerOptions: VideoPlayerOptions(
           allowBackgroundPlayback: true, mixWithOthers: true),
-    )..initialize();
-
-
-    videoViewer = VideoViewer(
-      language: VideoViewerLanguage.en,
-      style: VideoViewerStyle(
-        header: Row(
-          children: [
-            Flexible(
-              child: Text(
-                video.title,
-                style: const TextStyle(color: Colors.white,overflow: TextOverflow.ellipsis),
-                maxLines: 1,
-              ),
-            ),
-          ],
-        ),
-        volumeBarStyle: VolumeBarStyle(
-          alignment: Alignment.centerLeft,
-          bar: BarStyle.volume(),
-        ),
-        progressBarStyle: ProgressBarStyle(
-          backgroundColor: Colors.black.withOpacity(0.36),
-          bar: BarStyle.progress(),
-        ),
-        playAndPauseStyle: PlayAndPauseWidgetStyle(
-          background: const Color(0xFF295acc).withOpacity(0.5),
-          circleRadius: 40,
-        ),
-        forwardAndRewindStyle: ForwardAndRewindStyle(
-          bar: BarStyle.forward(),
-        ),
-        // settingsStyle: SettingsMenuStyle(items: [
-        //   SettingsMenuItem(
-        //     secondaryMenu: Icon(
-        //       Icons.settings_outlined,
-        //       color: Colors.white,
-        //       size: 20,
-        //     ),
-        //     mainMenu: Icon(
-        //       Icons.settings_outlined,
-        //       color: Colors.white,
-        //       size: 20,
-        //     ),
-        //   ),
-        // ],),
-      ),
-      enableFullscreenScale: true,
-      onFullscreenFixLandscape: false,
-      volumeManager: VideoViewerVolumeManager.video,
-      controller: videoViewerController,
-      autoPlay: true,
-      looping: true,
-      source: {
-        "SubRip Text": VideoSource(
-          video: VideoPlayerController.file(
-            video.file,
-            videoPlayerOptions: VideoPlayerOptions(
-              mixWithOthers: true,
-              allowBackgroundPlayback: true,
-            ),
-          ),
-        ),
-      },
     );
+    videoPlayerController.setLooping(true);
+    initializeVideoFuture = videoPlayerController.initialize().then((_) {
+      if (!mounted) return;
+      setState(() {});
+      videoPlayerController.play();
+    });
   }
 
   @override
   void dispose() {
-    super.dispose();
-    videoViewerController.dispose();
     videoPlayerController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AspectRatio(
-        aspectRatio: MediaQuery.of(context).size.aspectRatio,
-        child: SafeArea(child: videoViewer),
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: FutureBuilder<void>(
+          future: initializeVideoFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            return GestureDetector(
+              onTap: () => setState(() => showControls = !showControls),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Center(
+                    child: AspectRatio(
+                      aspectRatio: videoPlayerController.value.aspectRatio,
+                      child: VideoPlayer(videoPlayerController),
+                    ),
+                  ),
+                  if (showControls)
+                    _VideoControls(
+                      controller: videoPlayerController,
+                      title: video.title,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
+    );
+  }
+}
+
+class _VideoControls extends StatelessWidget {
+  final VideoPlayerController controller;
+  final String title;
+
+  const _VideoControls({
+    required this.controller,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Stack(
+          children: [
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 12,
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            Center(
+              child: IconButton(
+                iconSize: 72,
+                color: Colors.white,
+                icon: Icon(
+                  controller.value.isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_fill,
+                ),
+                onPressed: () {
+                  controller.value.isPlaying
+                      ? controller.pause()
+                      : controller.play();
+                },
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: VideoProgressIndicator(
+                controller,
+                allowScrubbing: true,
+                colors: const VideoProgressColors(
+                  playedColor: Color(0xFF295ACC),
+                  bufferedColor: Colors.white54,
+                  backgroundColor: Colors.white24,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
