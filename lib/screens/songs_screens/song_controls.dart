@@ -31,72 +31,76 @@ class _SongControlsState extends State<SongControls> {
     return Container(
       color: Colors.black,
       height: 50,
-      padding: EdgeInsets.only(right: 15),
-      child: Row(
-        children: [
-          Container(
-            child: (!audioPlayer.playing)
-                ? IconButton(
-                    onPressed: () {
-                      audioPlayer.play();
-                      setState(() {});
-                    },
-                    iconSize: 30,
+      padding: const EdgeInsets.only(right: 15),
+      child: StreamBuilder<Duration>(
+        stream: audioPlayer.positionStream,
+        initialData: Duration.zero,
+        builder: (context, snapshot) {
+          final position = snapshot.data ?? Duration.zero;
+          final duration = audioPlayer.duration ?? Duration.zero;
+          final max = duration.inMilliseconds <= 0
+              ? 1.0
+              : duration.inMilliseconds.toDouble();
+          final value = position.inMilliseconds.clamp(0, max).toDouble();
+
+          return Row(
+            children: [
+              IconButton(
+                onPressed: () {
+                  audioPlayer.playing
+                      ? audioPlayer.pause()
+                      : audioPlayer.play();
+                  setState(() {});
+                },
+                iconSize: 30,
+                color: Colors.white,
+                icon: Icon(
+                  audioPlayer.playing
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                ),
+              ),
+              const SizedBox(width: 5),
+              SizedBox(
+                width: 50,
+                child: Text(
+                  _printDuration(position),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
                     color: Colors.white,
-                    icon: Icon(Icons.play_arrow_rounded),
-                  )
-                : IconButton(
-                    onPressed: () {
-                      audioPlayer.pause();
-                      setState(() {});
-                    },
-                    iconSize: 30,
-                    color: Colors.white,
-                    icon: Icon(Icons.pause_rounded),
+                    fontSize: 12,
                   ),
-          ),
-          SizedBox(
-            width: 5,
-          ),
-          StreamBuilder(
-              stream: audioPlayer.positionStream,
-              builder: (context, snapshot) {
-                var pos = snapshot.data;
-                return Text(
-                  _printDuration(pos!),
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
-                );
-              }),
-          Expanded(
-            child: StreamBuilder(
-              stream: audioPlayer.positionStream,
-              builder: (context, snapshot) {
-                var position = snapshot.data;
-                return Slider(
+                ),
+              ),
+              Expanded(
+                child: Slider(
                   activeColor: Colors.red,
                   min: 0,
-                  max: audioPlayer.duration?.inSeconds.toDouble() ?? 0.0,
-                  value: position?.inSeconds.toDouble() ?? 0,
+                  max: max,
+                  value: value,
                   onChanged: (value) async {
-                    final pos = Duration(seconds: value.toInt());
-                    await audioPlayer.seek(pos);
-                    position = pos;
-                    // setState(() {});
-                    // await audioPlayer.resume();
+                    await audioPlayer.seek(
+                      Duration(milliseconds: value.round()),
+                    );
                   },
-                );
-              },
-            ),
-          ),
-          Text(
-            _printDuration(audioPlayer.duration ?? Duration()),
-            style: TextStyle(
-              color: Colors.white,
-            ),
-          ),
-        ],
+                ),
+              ),
+              SizedBox(
+                width: 50,
+                child: Text(
+                  _printDuration(duration),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

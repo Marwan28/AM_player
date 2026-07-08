@@ -17,19 +17,19 @@ class IconText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           iconData,
           size: iconSize,
           color: iconColor,
         ),
-        SizedBox(
-          height: 8,
-        ),
+        const SizedBox(height: 8),
         Text(
           string,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: textColor,
             fontSize: 10,

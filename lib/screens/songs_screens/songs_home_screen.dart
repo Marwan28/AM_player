@@ -1,11 +1,14 @@
 import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
+import 'package:am_player/models/song.dart';
+import 'package:am_player/theme/app_theme.dart';
+import 'package:am_player/widgets/am_widgets.dart';
 import 'package:flutter/material.dart';
-
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:just_audio/just_audio.dart';
 
 class SongsHomeScreen extends StatefulWidget {
-  const SongsHomeScreen({Key? key}) : super(key: key);
+  const SongsHomeScreen({super.key});
 
   @override
   State<SongsHomeScreen> createState() => _SongsHomeScreenState();
@@ -13,7 +16,7 @@ class SongsHomeScreen extends StatefulWidget {
 
 class _SongsHomeScreenState extends State<SongsHomeScreen>
     with AutomaticKeepAliveClientMixin<SongsHomeScreen> {
-  late AudioPlayer audioPlayer;
+  late final AudioPlayer audioPlayer;
   int currentIndex = 0;
   String currentPath = '';
 
@@ -22,14 +25,14 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
     super.initState();
     audioPlayer = AudioPlayer();
     audioPlayer.setLoopMode(LoopMode.all);
-    if (context.read<SongsBloc>().allSongs?.isEmpty ?? true) {
-      context.read<SongsBloc>().add(LoadSongsEvent());
+    final bloc = context.read<SongsBloc>();
+    if (bloc.allSongs?.isEmpty ?? true) {
+      bloc.add(LoadSongsEvent());
     }
   }
 
   @override
   void dispose() {
-    // TODO: implement dispose
     audioPlayer.dispose();
     super.dispose();
   }
@@ -38,240 +41,376 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return Scaffold(
-      body: BlocBuilder<SongsBloc, SongsState>(
-        builder: (context, state) {
-          return ListView.builder(
-            //padding: EdgeInsets.only(bottom: 20),
-            itemBuilder: (context, index) {
-              return InkWell(
-                onTap: () {
-                  // audioPlayer.setFilePath(BlocProvider.of<SongsBloc>(context)
-                  //     .allSongs![index]
-                  //     .filePath!);
-                  if (currentPath ==
-                      BlocProvider.of<SongsBloc>(context)
-                          .allSongs![index]
-                          .filePath!) {
-                    if (audioPlayer.playing) {
-                      audioPlayer.pause();
-                      setState(() {});
-                      setState(() {});
-                    } else {
-                      audioPlayer.play();
-                      setState(() {});
-                    }
-                  } else {
-                    audioPlayer.setFilePath(BlocProvider.of<SongsBloc>(context)
-                        .allSongs![index]
-                        .filePath!);
-                    currentIndex = index;
-                    currentPath = BlocProvider.of<SongsBloc>(context)
-                        .allSongs![index]
-                        .filePath!;
-                    audioPlayer.setAudioSource(
-                        ConcatenatingAudioSource(
-                            children: BlocProvider.of<SongsBloc>(context)
-                                .songAudioSourceList!),
-                        initialIndex: currentIndex);
-                    audioPlayer.play();
-                    setState(() {});
-                  }
-                },
-                child: Container(
-                  margin: const EdgeInsets.symmetric(
-                    vertical: 10,
-                  ),
-                  color: Colors.red,
-                  child: Column(
-                    children: [
-                      Text(
-                        BlocProvider.of<SongsBloc>(context)
-                            .allSongs![index]
-                            .title!,
-                      ),
-                      const SizedBox(
-                        height: 10,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-            itemCount: BlocProvider.of<SongsBloc>(context).allSongs!.length,
+    return BlocBuilder<SongsBloc, SongsState>(
+      builder: (context, state) {
+        final songs = context.read<SongsBloc>().allSongs ?? [];
+        if (songs.isEmpty) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppTheme.primary),
           );
-        },
-      ),
+        }
 
-      // bottomNavigationBar: SongControls(
-      //   filePath: BlocProvider.of<SongsBloc>(context)
-      //       .allSongs![0]
-      //       .filePath!,
-      // ),
-      bottomNavigationBar: Container(
-        color: Colors.black,
-        height: 100,
-        width: MediaQuery.of(context).size.width,
-        padding: const EdgeInsets.only(right: 15, left: 15),
-        child: Column(
+        return Column(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                StreamBuilder(
-                    stream: audioPlayer.positionStream,
-                    builder: (context, snapshot) {
-                      var pos = snapshot.data;
-                      if (snapshot.hasData) {
-                        return Text(
-                          _printDuration(pos!),
-                          style: const TextStyle(
-                            color: Colors.white,
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: songs.length + 2,
+                itemBuilder: (context, index) {
+                  if (index == 0) return const AmAdBanner();
+                  if (index == 1) {
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12.w),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.shuffle_rounded,
+                              label: 'Shuffle all',
+                              onTap: () {},
+                            ),
                           ),
-                        );
-                      } else {
-                        return Text(
-                          '00:00',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: _QuickAction(
+                              icon: Icons.auto_awesome_rounded,
+                              label: 'Smart mix',
+                              onTap: () {},
+                            ),
                           ),
-                        );
-                      }
-                    }),
-                Expanded(
-                  child: StreamBuilder(
-                    stream: audioPlayer.positionStream,
-                    builder: (context, snapshot) {
-                      var position = snapshot.data;
-                      return Slider(
-                        activeColor: Colors.red,
-                        min: 0,
-                        max: audioPlayer.duration?.inSeconds.toDouble() ?? 0.0,
-                        value: position?.inSeconds.toDouble() ?? 0,
-                        onChanged: (value) async {
-                          final pos = Duration(seconds: value.toInt());
-                          await audioPlayer.seek(pos);
-                          position = pos;
-                          // setState(() {});
-                          // await audioPlayer.resume();
-                        },
-                      );
-                    },
-                  ),
-                ),
-                StreamBuilder(
-                    stream: audioPlayer.durationStream,
-                    builder: (context, snapshot) {
-                      var duration = snapshot.data;
-                      return Text(
-                        _printDuration(duration ?? const Duration()),
-                        style: const TextStyle(
-                          color: Colors.white,
-                        ),
-                      );
-                    }),
-              ],
+                        ],
+                      ),
+                    );
+                  }
+                  final song = songs[index - 2];
+                  return _SongRow(
+                    index: index - 1,
+                    song: song,
+                    active: currentPath == song.filePath,
+                    playing:
+                        audioPlayer.playing && currentPath == song.filePath,
+                    onTap: () => _playSong(song, index - 2),
+                  );
+                },
+              ),
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: () {
-                    if (audioPlayer.hasPrevious) {
-                      audioPlayer.seekToPrevious();
-                      audioPlayer.play();
-                      setState(() {});
-                    }
-                  },
-                  icon: const Icon(Icons.skip_previous),
-                  iconSize: 30,
-                  color: Colors.white,
-                ),
-                Container(
-                  child: (!audioPlayer.playing)
-                      ? IconButton(
-                          onPressed: () {
-                            if (currentPath == '') {
-                              audioPlayer.setFilePath(
-                                  BlocProvider.of<SongsBloc>(context)
-                                      .allSongs![currentIndex]
-                                      .filePath!);
-                              currentPath = BlocProvider.of<SongsBloc>(context)
-                                  .allSongs![currentIndex]
-                                  .filePath!;
-                              audioPlayer.setAudioSource(
-                                  ConcatenatingAudioSource(
-                                      children:
-                                          BlocProvider.of<SongsBloc>(context)
-                                              .songAudioSourceList!),
-                                  initialIndex: currentIndex);
-                            }
-
-                            audioPlayer.play();
-                            setState(() {});
-                          },
-                          iconSize: 30,
-                          color: Colors.white,
-                          icon: const Icon(Icons.play_arrow_rounded),
-                        )
-                      : IconButton(
-                          onPressed: () {
-                            audioPlayer.pause();
-                            setState(() {});
-                          },
-                          iconSize: 30,
-                          color: Colors.white,
-                          icon: const Icon(Icons.pause_rounded),
-                        ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    if (audioPlayer.hasNext) {
-                      audioPlayer.seekToNext();
-                      audioPlayer.play();
-                      setState(() {});
-                    }
-                    // currentIndex = currentIndex + 1;
-                    // currentPlayingFilePath = BlocProvider.of<SongsBloc>(context)
-                    //     .allSongs![currentIndex]
-                    //     .filePath!;
-                    // audioPlayer.setFilePath(BlocProvider.of<SongsBloc>(context)
-                    //     .allSongs![currentIndex]
-                    //     .filePath!);
-                    // audioPlayer.setAudioSource(AudioSource.uri(
-                    //   BlocProvider.of<SongsBloc>(context)
-                    //       .allSongs![currentIndex]
-                    //       .uri!,
-                    //   tag: MediaItem(id: '1', title: 'Song Name'),
-                    // ));
-                    // audioPlayer.play();
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.skip_next),
-                  iconSize: 30,
-                  color: Colors.white,
-                ),
-              ],
+            _MiniAudioPlayer(
+              player: audioPlayer,
+              title: currentPath.isEmpty
+                  ? 'Nothing is playing'
+                  : songs[currentIndex].title ?? 'Unknown track',
+              onPrevious: _previous,
+              onToggle: _togglePlay,
+              onNext: _next,
             ),
           ],
-        ),
-      ),
-      //floatingActionButton: Text('marwan',style: TextStyle(fontSize: 30,color: Colors.black),),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        );
+      },
     );
   }
 
-  String _printDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    if (twoDigits(duration.inHours) == '0' ||
-        twoDigits(duration.inHours) == '00') {
-      return "$twoDigitMinutes:$twoDigitSeconds";
+  Future<void> _playSong(Song song, int index) async {
+    final bloc = context.read<SongsBloc>();
+    if (currentPath == song.filePath) {
+      await _togglePlay();
+      return;
     }
-    return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
+
+    currentIndex = index;
+    currentPath = song.filePath ?? '';
+    if ((bloc.songAudioSourceList ?? []).isNotEmpty) {
+      await audioPlayer.setAudioSource(
+        ConcatenatingAudioSource(children: bloc.songAudioSourceList!),
+        initialIndex: currentIndex,
+      );
+    } else if (currentPath.isNotEmpty) {
+      await audioPlayer.setFilePath(currentPath);
+    }
+    await audioPlayer.play();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _togglePlay() async {
+    if (currentPath.isEmpty) return;
+    if (audioPlayer.playing) {
+      await audioPlayer.pause();
+    } else {
+      await audioPlayer.play();
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _previous() async {
+    if (audioPlayer.hasPrevious) {
+      await audioPlayer.seekToPrevious();
+      await audioPlayer.play();
+      currentIndex = audioPlayer.currentIndex ?? currentIndex;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _next() async {
+    if (audioPlayer.hasNext) {
+      await audioPlayer.seekToNext();
+      await audioPlayer.play();
+      currentIndex = audioPlayer.currentIndex ?? currentIndex;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
   bool get wantKeepAlive => true;
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8.r),
+      child: Container(
+        padding: EdgeInsets.all(10.w),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32.w,
+              height: 32.w,
+              decoration: const BoxDecoration(
+                color: AppTheme.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.white, size: 16.sp),
+            ),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SongRow extends StatelessWidget {
+  final int index;
+  final Song song;
+  final bool active;
+  final bool playing;
+  final VoidCallback onTap;
+
+  const _SongRow({
+    required this.index,
+    required this.song,
+    required this.active,
+    required this.playing,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24.w,
+              child: Text(
+                '$index',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: active ? AppTheme.primary : colors.onSurfaceVariant,
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            SizedBox(width: 8.w),
+            Container(
+              width: 44.w,
+              height: 44.w,
+              decoration: BoxDecoration(
+                color:
+                    active ? AppTheme.primary : colors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Icon(
+                playing ? Icons.pause_rounded : Icons.music_note_rounded,
+                color: active ? Colors.white : colors.onSurfaceVariant,
+                size: 22.sp,
+              ),
+            ),
+            SizedBox(width: 10.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    song.title ?? 'Unknown track',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 3.h),
+                  Text(
+                    _songSubtitle(song),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 11.sp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AmIconButton(
+              icon: Icons.more_vert_rounded,
+              tooltip: 'More',
+              onPressed: () {},
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _songSubtitle(Song song) {
+    final path = song.filePath;
+    if (path == null || path.isEmpty) return 'Local audio';
+    final parts = path.split(RegExp(r'[\\/]'));
+    if (parts.length < 2) return 'Local audio';
+    return parts[parts.length - 2];
+  }
+}
+
+class _MiniAudioPlayer extends StatelessWidget {
+  final AudioPlayer player;
+  final String title;
+  final VoidCallback onPrevious;
+  final VoidCallback onToggle;
+  final VoidCallback onNext;
+
+  const _MiniAudioPlayer({
+    required this.player,
+    required this.title,
+    required this.onPrevious,
+    required this.onToggle,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 10.h),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w800),
+                ),
+              ),
+              AmIconButton(
+                icon: Icons.skip_previous_rounded,
+                tooltip: 'Previous',
+                onPressed: onPrevious,
+              ),
+              StreamBuilder<bool>(
+                stream: player.playingStream,
+                initialData: player.playing,
+                builder: (context, snapshot) {
+                  final playing = snapshot.data ?? false;
+                  return Container(
+                    width: 42.w,
+                    height: 42.w,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      color: Colors.white,
+                      icon: Icon(
+                        playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                      ),
+                      onPressed: onToggle,
+                    ),
+                  );
+                },
+              ),
+              AmIconButton(
+                icon: Icons.skip_next_rounded,
+                tooltip: 'Next',
+                onPressed: onNext,
+              ),
+            ],
+          ),
+          StreamBuilder<Duration>(
+            stream: player.positionStream,
+            initialData: Duration.zero,
+            builder: (context, positionSnapshot) {
+              final position = positionSnapshot.data ?? Duration.zero;
+              final duration = player.duration ?? Duration.zero;
+              final max = duration.inMilliseconds <= 0
+                  ? 1.0
+                  : duration.inMilliseconds.toDouble();
+              return Slider(
+                min: 0,
+                max: max,
+                value: position.inMilliseconds.clamp(0, max).toDouble(),
+                activeColor: AppTheme.primary,
+                inactiveColor: colors.surfaceContainerHighest,
+                onChanged: (value) {
+                  player.seek(Duration(milliseconds: value.round()));
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -5,12 +5,12 @@ abstract class SongsState {}
 
 class SongsInitial extends SongsState {}
 
-class SongsLoadingState extends SongsState{}
+class SongsLoadingState extends SongsState {}
 
-class SongsLoadedState extends SongsState{}
+class SongsLoadedState extends SongsState {}
 
-class PlayingSongState extends SongsState{}
+class PlayingSongState extends SongsState {}
 
-class PausingSongState extends SongsState{}
+class PausingSongState extends SongsState {}
 
-class StopingSongState extends SongsState{}
+class StopingSongState extends SongsState {}

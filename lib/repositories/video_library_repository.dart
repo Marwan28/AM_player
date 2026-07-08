@@ -9,7 +9,7 @@ import 'package:sqflite/sqflite.dart';
 
 class VideoLibraryRepository {
   static const _databaseName = 'am_player_media.db';
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 2;
 
   Database? _database;
 
@@ -22,30 +22,66 @@ class VideoLibraryRepository {
       path,
       version: _databaseVersion,
       onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE videos (
-            asset_id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            path TEXT NOT NULL,
-            folder_id TEXT NOT NULL,
-            folder_name TEXT NOT NULL,
-            duration_ms INTEGER NOT NULL,
-            modified_ms INTEGER NOT NULL,
-            width INTEGER NOT NULL,
-            height INTEGER NOT NULL,
-            size_bytes INTEGER NOT NULL
-          )
-        ''');
-        await db.execute(
-          'CREATE INDEX idx_videos_folder ON videos(folder_id, title)',
-        );
-        await db.execute(
-          'CREATE INDEX idx_videos_modified ON videos(modified_ms DESC)',
-        );
+        await _createVideosTable(db);
+        await _createPlaybackPositionsTable(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createPlaybackPositionsTable(db);
+        }
       },
     );
 
     return _database!;
+  }
+
+  Future<Duration> loadPlaybackPosition(String assetId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'video_playback_positions',
+      columns: ['position_ms'],
+      where: 'asset_id = ?',
+      whereArgs: [assetId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return Duration.zero;
+    return Duration(milliseconds: (rows.first['position_ms'] as num).toInt());
+  }
+
+  Future<void> savePlaybackPosition({
+    required String assetId,
+    required Duration position,
+    required Duration duration,
+  }) async {
+    final durationMs = duration.inMilliseconds;
+    final positionMs = position.inMilliseconds;
+
+    final shouldClear = durationMs > 0 && positionMs > durationMs - 5000;
+    if (shouldClear || positionMs < 1000) {
+      await clearPlaybackPosition(assetId);
+      return;
+    }
+
+    final db = await _db;
+    await db.insert(
+      'video_playback_positions',
+      {
+        'asset_id': assetId,
+        'position_ms': positionMs,
+        'duration_ms': durationMs,
+        'updated_ms': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> clearPlaybackPosition(String assetId) async {
+    final db = await _db;
+    await db.delete(
+      'video_playback_positions',
+      where: 'asset_id = ?',
+      whereArgs: [assetId],
+    );
   }
 
   Future<List<VideoFolder>> loadFolders() async {
@@ -65,7 +101,7 @@ class VideoLibraryRepository {
         MAX(modified_ms) AS latest_modified_ms
       FROM videos
       GROUP BY folder_id, folder_name
-      ORDER BY folder_name COLLATE NOCASE ASC
+      ORDER BY latest_modified_ms DESC
     ''');
     return rows.map(VideoFolder.fromMap).toList();
   }
@@ -76,7 +112,7 @@ class VideoLibraryRepository {
       'videos',
       where: 'folder_id = ?',
       whereArgs: [folderId],
-      orderBy: 'title COLLATE NOCASE ASC',
+      orderBy: 'modified_ms DESC',
     );
     return rows.map(VideoItem.fromMap).toList();
   }
@@ -189,6 +225,40 @@ class VideoLibraryRepository {
       height: asset.orientatedHeight,
       sizeBytes: stat.size,
     );
+  }
+
+  Future<void> _createVideosTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE videos (
+        asset_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        path TEXT NOT NULL,
+        folder_id TEXT NOT NULL,
+        folder_name TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        modified_ms INTEGER NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        size_bytes INTEGER NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_videos_folder ON videos(folder_id, title)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_videos_modified ON videos(modified_ms DESC)',
+    );
+  }
+
+  Future<void> _createPlaybackPositionsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS video_playback_positions (
+        asset_id TEXT PRIMARY KEY,
+        position_ms INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        updated_ms INTEGER NOT NULL
+      )
+    ''');
   }
 }
 

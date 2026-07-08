@@ -29,12 +29,12 @@ class _LoadingState extends State<Loading> {
           );
         }
       },
-      child: Scaffold(
+      child: const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               SpinKitRing(
                 color: Color(0xFFE53935),
                 size: 92,

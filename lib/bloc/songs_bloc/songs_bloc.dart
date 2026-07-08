@@ -1,11 +1,8 @@
-import 'dart:io';
 import 'package:am_player/models/song.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:meta/meta.dart';
-import 'package:on_audio_query/on_audio_query.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 part 'songs_event.dart';
@@ -13,11 +10,11 @@ part 'songs_state.dart';
 
 class SongsBloc extends Bloc<SongsEvent, SongsState> {
   List<AssetPathEntity>? songsPathsEntity;
-  List<String>? songsPaths;
+  List<String>? songsPaths = [];
   List<Song>? allSongs = [];
   List<AudioSource>? songAudioSourceList = [];
-  final Map<String, int> entities_lenght = <String, int>{};
-  final Map<String, List<Song>> folders_songs = <String, List<Song>>{};
+  final Map<String, int> entitiesLength = <String, int>{};
+  final Map<String, List<Song>> folderSongs = <String, List<Song>>{};
   late Song currentPlayingVideo;
 
   SongsBloc() : super(SongsLoadingState()) {
@@ -28,50 +25,54 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
   }
 
   loadSongs(Emitter emit) async {
-    Permission.manageExternalStorage.request();
-    Permission.storage.request();
-    songsPathsEntity =
-        await PhotoManager.getAssetPathList(type: RequestType.audio);
-    print('---------- songs ----------');
-    songsPathsEntity!.removeAt(0);
-    for (int i = 0; i < songsPathsEntity!.length; i++) {
-      final List<AssetEntity> entity =
-          await songsPathsEntity![i].getAssetListRange(start: 0, end: 999999999);
+    songsPaths = [];
+    allSongs = [];
+    songAudioSourceList = [];
+    entitiesLength.clear();
+    folderSongs.clear();
+
+    final permission = await PhotoManager.requestPermissionExtend();
+    if (!permission.hasAccess) {
+      emit(SongsLoadedState());
+      return;
+    }
+
+    songsPathsEntity = await PhotoManager.getAssetPathList(
+      type: RequestType.audio,
+      hasAll: false,
+    );
+
+    for (final path in songsPathsEntity ?? <AssetPathEntity>[]) {
+      final count = await path.assetCountAsync;
       //print('entity: ${videosPathsEntity![i].name} + total videos ${entity.length}');
       //entities.
-      entities_lenght[songsPathsEntity![i].id] = entity.length;
-      print('-----------------------');
-      print(entities_lenght);
+      entitiesLength[path.id] = count;
 
       List<Song> currentFolderSongsList = [];
 
+      const pageSize = 120;
+      for (var page = 0; page * pageSize < count; page++) {
+        final entity = await path.getAssetListPaged(
+          page: page,
+          size: pageSize,
+        );
 
-      for (AssetEntity asset in entity) {
-        File? file = await asset.file;
-        songsPaths?.add(file!.path);
-        // print(asset.title);
-        // print(asset.id);
-        // print(asset.relativePath);
-        // print('--------file uri: ${file!.uri}');
-        // print('--------file path: ${file!.path}');
-        // print(file!.path);
+        for (AssetEntity asset in entity) {
+          final file = await asset.file;
+          if (file == null) continue;
 
-        allSongs?.add(Song(
-          title: asset.title!,
-          filePath: file!.path,
-          uri: file.uri,
-          id: asset.id,
-        ));
-        currentFolderSongsList.add(Song(
-          title: asset.title!,
-          filePath: file!.path,
-          uri: file.uri,
-          id: asset.id,
-        ));
-        //print(' marwan\'file video path: ${file!.path}');
-        emit(SongsLoadedState());
+          songsPaths?.add(file.path);
+          final song = Song(
+            title: asset.title ?? file.uri.pathSegments.last,
+            filePath: file.path,
+            uri: file.uri,
+            id: asset.id,
+          );
+          allSongs?.add(song);
+          currentFolderSongsList.add(song);
+        }
       }
-      folders_songs[songsPathsEntity![i].id] = currentFolderSongsList;
+      folderSongs[path.id] = currentFolderSongsList;
       emit(SongsLoadedState());
     }
     for (var song in allSongs!) {
@@ -84,16 +85,6 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
       ));
       emit(SongsLoadedState());
     }
-    print('565656565656');
-
-
-    print(allSongs!.length);
-
-
-
-
-
-
 
     // final audioQuery = OnAudioQuery();
     // final songsQuery = await audioQuery.querySongs();
@@ -101,11 +92,6 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
     // File file = File(songsQuery[0].getMap['_data']);
     // print(file.uri);
     // print(file.path);
-
-
-    print('----------');
-
-
 
     // List<Song> songs = [];
     // print('marwan ------');
@@ -203,5 +189,4 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
 //     audioPlayer.resume();
 //   });
 // }
-
 }

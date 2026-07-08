@@ -39,6 +39,7 @@ dependencies:
   path: ^1.9.1
   bloc: ^8.1.4
   meta: ^1.17.0
+  flutter_screenutil: ^5.9.3
 
 dev_dependencies:
   flutter_test:

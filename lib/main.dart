@@ -1,5 +1,7 @@
 import 'package:am_player/app_router.dart';
+import 'package:am_player/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -22,9 +24,15 @@ Future<void> main() async {
 // bool isPlaying = false;
 // double? _slider;
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final AppRouter appRouter;
   const MyApp({super.key, required this.appRouter});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   // Widget bottomPanel() {
   //   return Column(
@@ -195,14 +203,51 @@ class MyApp extends StatelessWidget {
   // }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      onGenerateRoute: appRouter.generateRoute,
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final logicalSize = view.physicalSize / view.devicePixelRatio;
+    final designSize = logicalSize.width > logicalSize.height
+        ? const Size(844, 390)
+        : const Size(390, 844);
+
+    return ScreenUtilInit(
+      key: ValueKey(designSize),
+      designSize: designSize,
+      minTextAdapt: true,
+      splitScreenMode: true,
+      rebuildFactor: RebuildFactors.change,
+      builder: (context, child) {
+        return ValueListenableBuilder<ThemeMode>(
+          valueListenable: AppThemeController.mode,
+          builder: (context, themeMode, _) {
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              title: 'AM Player',
+              theme: AppTheme.light(),
+              darkTheme: AppTheme.dark(),
+              themeMode: themeMode,
+              onGenerateRoute: widget.appRouter.generateRoute,
+            );
+          },
+        );
+      },
     );
   }
   // Widget scaffold(){
