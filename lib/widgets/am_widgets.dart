@@ -278,6 +278,8 @@ class AmBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.width > size.height;
     return Container(
       decoration: BoxDecoration(
         color: colors.surface.withValues(alpha: 0.96),
@@ -286,7 +288,7 @@ class AmBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 58.h,
+          height: compact ? 44.h : 58.h,
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
@@ -296,6 +298,7 @@ class AmBottomNav extends StatelessWidget {
                     label: items[i].$2,
                     active: i == currentIndex,
                     onTap: () => onChanged(i),
+                    compact: compact,
                   ),
                 ),
             ],
@@ -399,12 +402,14 @@ class _BottomNavItem extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final bool compact;
 
   const _BottomNavItem({
     required this.icon,
     required this.label,
     required this.active,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
@@ -417,15 +422,15 @@ class _BottomNavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 21.sp),
-          SizedBox(height: 2.h),
+          Icon(icon, color: color, size: compact ? 18.sp : 21.sp),
+          SizedBox(height: compact ? 1.h : 2.h),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
-              fontSize: 10.sp,
+              fontSize: compact ? 9.sp : 10.sp,
               fontWeight: FontWeight.w700,
             ),
           ),
