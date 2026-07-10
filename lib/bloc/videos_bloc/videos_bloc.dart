@@ -16,51 +16,54 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
     on<LoadVideosEvent>(_onLoadVideos);
     on<RefreshVideosEvent>(_onRefreshVideos);
     on<OpenVideoFolderEvent>(_onOpenFolder);
-    on<SelectVideoEvent>(_onSelectVideo);
-    on<RenameVideoEvent>(_onRenameVideo);
+    on<DeleteVideoEvent>(_onDeleteVideo);
   }
 
   Future<void> _onLoadVideos(
     LoadVideosEvent event,
     Emitter<VideosState> emit,
   ) async {
-    await _loadCachedFolders(emit, loading: true);
-    await _syncAndReload(emit);
+    if (state.isSyncing) return;
+    try {
+      await _loadCachedFolders(emit);
+      await _syncAndReload(emit);
+    } catch (error) {
+      emit(
+        state.copyWith(
+          isLoading: false,
+          isSyncing: false,
+          errorMessage: error.toString(),
+        ),
+      );
+    }
   }
 
   Future<void> _onRefreshVideos(
     RefreshVideosEvent event,
     Emitter<VideosState> emit,
   ) async {
-    await _syncAndReload(emit);
+    if (state.isSyncing) return;
+    await _syncAndReload(emit, force: true);
   }
 
   Future<void> _onOpenFolder(
     OpenVideoFolderEvent event,
     Emitter<VideosState> emit,
   ) async {
+    if (state.videosByFolder.containsKey(event.folderId)) return;
     final videos = await repository.loadVideosInFolder(event.folderId);
     final updatedMap = Map<String, List<VideoItem>>.from(state.videosByFolder);
     updatedMap[event.folderId] = videos;
     emit(state.copyWith(videosByFolder: updatedMap, clearError: true));
   }
 
-  void _onSelectVideo(
-    SelectVideoEvent event,
-    Emitter<VideosState> emit,
-  ) {
-    emit(state.copyWith(currentVideo: event.video));
-  }
-
-  Future<void> _onRenameVideo(
-    RenameVideoEvent event,
+  Future<void> _onDeleteVideo(
+    DeleteVideoEvent event,
     Emitter<VideosState> emit,
   ) async {
+    emit(state.copyWith(isSyncing: true, clearError: true));
     try {
-      await repository.renameVideo(
-        item: event.video,
-        newBaseName: event.newBaseName,
-      );
+      await repository.deleteVideo(event.video);
       final folders = await repository.loadFolders();
       final videos = await repository.loadVideosInFolder(event.video.folderId);
       final updatedMap =
@@ -70,36 +73,69 @@ class VideosBloc extends Bloc<VideosEvent, VideosState> {
         state.copyWith(
           folders: folders,
           videosByFolder: updatedMap,
+          isSyncing: false,
           clearError: true,
         ),
       );
-    } catch (error) {
-      emit(state.copyWith(errorMessage: error.toString()));
+    } on VideoDeleteException {
+      emit(
+        state.copyWith(
+          isSyncing: false,
+          errorMessage: 'The video could not be deleted.',
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          isSyncing: false,
+          errorMessage: 'Unable to delete this video.',
+        ),
+      );
     }
   }
 
-  Future<void> _loadCachedFolders(
-    Emitter<VideosState> emit, {
-    required bool loading,
-  }) async {
+  Future<void> _loadCachedFolders(Emitter<VideosState> emit) async {
     final folders = await repository.loadFolders();
     emit(
       state.copyWith(
         folders: folders,
-        isLoading: loading && folders.isEmpty,
+        isLoading: false,
         clearError: true,
       ),
     );
   }
 
-  Future<void> _syncAndReload(Emitter<VideosState> emit) async {
+  Future<void> _syncAndReload(
+    Emitter<VideosState> emit, {
+    bool force = false,
+  }) async {
     emit(state.copyWith(isSyncing: true, permissionDenied: false));
     try {
-      await repository.syncDeviceVideos();
+      final changed = await repository.syncDeviceVideos(force: force);
+      if (!changed) {
+        emit(
+          state.copyWith(
+            isLoading: false,
+            isSyncing: false,
+            permissionDenied: false,
+            clearError: true,
+          ),
+        );
+        return;
+      }
       final folders = await repository.loadFolders();
+      final refreshedVideos = <String, List<VideoItem>>{};
+      final availableFolderIds = folders.map((folder) => folder.id).toSet();
+      for (final folderId in state.videosByFolder.keys) {
+        if (availableFolderIds.contains(folderId)) {
+          refreshedVideos[folderId] =
+              await repository.loadVideosInFolder(folderId);
+        }
+      }
       emit(
         state.copyWith(
           folders: folders,
+          videosByFolder: refreshedVideos,
           isLoading: false,
           isSyncing: false,
           permissionDenied: false,

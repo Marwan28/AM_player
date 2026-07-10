@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/controllers/audio_playback_controller.dart';
 import 'package:am_player/models/song.dart';
@@ -20,14 +22,18 @@ class SongsHomeScreen extends StatefulWidget {
 class _SongsHomeScreenState extends State<SongsHomeScreen>
     with AutomaticKeepAliveClientMixin<SongsHomeScreen> {
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<String?> _fastScrollLabel = ValueNotifier(null);
+  Timer? _searchDebounce;
   _AudioView view = _AudioView.songs;
   String? selectedFolderId;
+  bool _requestedInitialLoad = false;
 
   @override
   void initState() {
     super.initState();
     final bloc = context.read<SongsBloc>();
     if (bloc.state.songs.isEmpty && !bloc.state.isSyncing) {
+      _requestedInitialLoad = true;
       bloc.add(const LoadSongsEvent());
     }
   }
@@ -39,9 +45,14 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
 
     return BlocBuilder<SongsBloc, SongsState>(
       builder: (context, state) {
+        _ensureInitialLoad(state, bloc);
         final visibleSongs = state.visibleSongs;
         final visibleFolderSongs = state.visibleFolderSongs;
-        final folders = _foldersFromSongs(visibleFolderSongs, state.sortMode);
+        final folderCount =
+            visibleFolderSongs.map((song) => song.folderId).toSet().length;
+        final folders = view == _AudioView.folders
+            ? _foldersFromSongs(visibleFolderSongs, state.sortMode)
+            : const <_AudioFolder>[];
         final selectedFolder = _selectedFolderFrom(folders);
 
         if (state.isLoading && state.songs.isEmpty) {
@@ -75,8 +86,13 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
           children: [
             _AudioHeader(
               state: state,
+              songCount: visibleSongs.length,
+              folderCount: folderCount,
               onQueryChanged: (query) {
-                bloc.add(SearchSongsEvent(query));
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+                  if (mounted) bloc.add(SearchSongsEvent(query));
+                });
                 if (selectedFolderId != null) {
                   setState(() => selectedFolderId = null);
                 }
@@ -135,27 +151,47 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
   }
 
   Widget _buildSongsViewport(List<Song> songs, SongsBloc bloc) {
-    final showFastScroller = songs.length > 30;
+    final showFastScroller =
+        songs.length > 30 && bloc.state.sortMode == AudioSortMode.titleAsc;
 
-    return Row(
+    return Stack(
       children: [
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async {
-              bloc.add(const LoadSongsEvent(refresh: true));
-            },
-            child: _buildSongList(
-              songs: songs,
-              queue: songs,
-              controller: _scrollController,
+        Row(
+          children: [
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => _refreshSongs(bloc),
+                child: _buildSongList(
+                  songs: songs,
+                  queue: songs,
+                  controller: _scrollController,
+                ),
+              ),
+            ),
+            if (showFastScroller)
+              _AlphabetFastScroller(
+                songs: songs,
+                controller: _scrollController,
+                onActiveLabelChanged: (label) {
+                  _fastScrollLabel.value = label;
+                },
+              ),
+          ],
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder<String?>(
+              valueListenable: _fastScrollLabel,
+              builder: (context, label, _) {
+                if (label == null) return const SizedBox.shrink();
+                return Align(
+                  alignment: const Alignment(0.72, 0),
+                  child: _FastScrollBubble(label: label),
+                );
+              },
             ),
           ),
         ),
-        if (showFastScroller)
-          _AlphabetFastScroller(
-            songs: songs,
-            controller: _scrollController,
-          ),
       ],
     );
   }
@@ -166,9 +202,7 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
     SongsBloc bloc,
   ) {
     return RefreshIndicator(
-      onRefresh: () async {
-        bloc.add(const LoadSongsEvent(refresh: true));
-      },
+      onRefresh: () => _refreshSongs(bloc),
       child: selectedFolder == null
           ? _buildFolderList(folders)
           : _buildSongList(
@@ -192,6 +226,8 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
       controller: controller,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
+      cacheExtent: 600.h,
+      addAutomaticKeepAlives: false,
       itemCount: songs.length + 1,
       itemBuilder: (context, index) {
         if (index == songs.length) {
@@ -275,22 +311,51 @@ class _SongsHomeScreenState extends State<SongsHomeScreen>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _scrollController.dispose();
+    _fastScrollLabel.dispose();
     super.dispose();
   }
 
   @override
   bool get wantKeepAlive => true;
+
+  Future<void> _refreshSongs(SongsBloc bloc) async {
+    if (!bloc.state.isSyncing) {
+      bloc.add(const LoadSongsEvent(refresh: true));
+    }
+    try {
+      await bloc.stream
+          .firstWhere((state) => !state.isSyncing)
+          .timeout(const Duration(seconds: 45));
+    } catch (_) {
+      return;
+    }
+  }
+
+  void _ensureInitialLoad(SongsState state, SongsBloc bloc) {
+    if (_requestedInitialLoad || state.songs.isNotEmpty || state.isSyncing) {
+      return;
+    }
+    _requestedInitialLoad = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) bloc.add(const LoadSongsEvent());
+    });
+  }
 }
 
 class _AudioHeader extends StatelessWidget {
   final SongsState state;
+  final int songCount;
+  final int folderCount;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<AudioSortMode> onSortChanged;
   final VoidCallback onRefresh;
 
   const _AudioHeader({
     required this.state,
+    required this.songCount,
+    required this.folderCount,
     required this.onQueryChanged,
     required this.onSortChanged,
     required this.onRefresh,
@@ -306,12 +371,12 @@ class _AudioHeader extends StatelessWidget {
           Row(
             children: [
               _CountChip(
-                label: '${state.visibleSongs.length} songs',
+                label: '$songCount songs',
                 icon: Icons.library_music_rounded,
               ),
               SizedBox(width: 8.w),
               _CountChip(
-                label: '${state.visibleFolderCount} folders',
+                label: '$folderCount folders',
                 icon: Icons.folder_rounded,
               ),
               const Spacer(),
@@ -620,10 +685,12 @@ class _SongRow extends StatelessWidget {
 class _AlphabetFastScroller extends StatefulWidget {
   final List<Song> songs;
   final ScrollController controller;
+  final ValueChanged<String?> onActiveLabelChanged;
 
   const _AlphabetFastScroller({
     required this.songs,
     required this.controller,
+    required this.onActiveLabelChanged,
   });
 
   @override
@@ -633,10 +700,30 @@ class _AlphabetFastScroller extends StatefulWidget {
 class _AlphabetFastScrollerState extends State<_AlphabetFastScroller> {
   bool dragging = false;
   String? activeLabel;
+  late List<_FastScrollSection> sections;
+
+  @override
+  void initState() {
+    super.initState();
+    sections = _sectionsFromSongs(widget.songs);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AlphabetFastScroller oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.songs, widget.songs)) {
+      sections = _sectionsFromSongs(widget.songs);
+      if (activeLabel != null &&
+          !sections.any((section) => section.label == activeLabel)) {
+        activeLabel = null;
+        dragging = false;
+        widget.onActiveLabelChanged(null);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sections = _sectionsFromSongs(widget.songs);
     if (sections.length < 2) return const SizedBox.shrink();
 
     final colors = Theme.of(context).colorScheme;
@@ -705,7 +792,7 @@ class _AlphabetFastScrollerState extends State<_AlphabetFastScroller> {
                               : colors.onSurfaceVariant.withValues(
                                   alpha: dragging ? 0.92 : 0.56,
                                 ),
-                          fontSize: i == activeIndex ? 9.5.sp : 7.5.sp,
+                          fontSize: 8.sp,
                           fontWeight: i == activeIndex
                               ? FontWeight.w900
                               : FontWeight.w800,
@@ -739,26 +826,28 @@ class _AlphabetFastScrollerState extends State<_AlphabetFastScroller> {
         .clamp(0, sections.length - 1);
     final section = sections[index];
 
-    if (!dragging || activeLabel != section.label) {
+    final changed = !dragging || activeLabel != section.label;
+    if (changed) {
       setState(() {
         dragging = true;
         activeLabel = section.label;
       });
+      widget.onActiveLabelChanged(section.label);
+      _jumpToSection(section);
     }
-
-    _jumpToSection(section);
   }
 
   void _finishTouch() {
     if (!dragging) return;
     setState(() => dragging = false);
+    widget.onActiveLabelChanged(null);
   }
 
   void _jumpToSection(_FastScrollSection section) {
     if (!widget.controller.hasClients) return;
 
     final maxScroll = widget.controller.position.maxScrollExtent;
-    final rowExtent = 67.h;
+    final rowExtent = 62.h;
     final estimatedTarget = section.songIndex * rowExtent;
     final proportionalTarget =
         maxScroll * (section.songIndex / widget.songs.length);
@@ -792,6 +881,42 @@ class _AlphabetFastScrollerState extends State<_AlphabetFastScroller> {
     if (RegExp(r'[0-9]').hasMatch(char)) return '#';
     if (RegExp(r'[a-zA-Z]').hasMatch(char)) return char.toUpperCase();
     return char;
+  }
+}
+
+class _FastScrollBubble extends StatelessWidget {
+  final String label;
+
+  const _FastScrollBubble({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 54.w,
+      height: 54.w,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.inverseSurface,
+        borderRadius: BorderRadius.circular(8.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 14.r,
+          ),
+        ],
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onInverseSurface,
+            fontSize: 24.sp,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -861,12 +986,6 @@ class AudioMiniPlayer extends StatelessWidget {
                       ),
                     ),
                     _MiniControl(
-                      icon: Icons.shuffle_rounded,
-                      tooltip: 'Shuffle',
-                      active: controller.shuffleEnabled,
-                      onPressed: controller.toggleShuffle,
-                    ),
-                    _MiniControl(
                       icon: Icons.skip_previous_rounded,
                       tooltip: 'Previous',
                       onPressed: controller.previous,
@@ -877,15 +996,13 @@ class AudioMiniPlayer extends StatelessWidget {
                       tooltip: 'Next',
                       onPressed: controller.next,
                     ),
-                    _MiniControl(
-                      icon: controller.repeatIcon(),
-                      tooltip: 'Repeat ${controller.repeatLabel()}',
-                      active: controller.repeatMode != LoopMode.off,
-                      onPressed: controller.cycleRepeatMode,
-                    ),
                   ],
                 ),
-                _AudioProgressBar(controller: controller, dense: true),
+                _AudioProgressBar(
+                  controller: controller,
+                  dense: true,
+                  showLabels: true,
+                ),
               ],
             ),
           ),
@@ -1023,26 +1140,11 @@ class _AudioPlayerSheet extends StatelessWidget {
                     ],
                   ),
                   SizedBox(height: 12.h),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _IconChip(
-                          icon: Icons.speed_rounded,
-                          label: '${_formatSpeed(controller.speed)}x',
-                          onTap: () => _showSpeedSheet(context, controller),
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      Expanded(
-                        child: _IconChip(
-                          icon: Icons.queue_music_rounded,
-                          label: '${controller.queue.length} queued',
-                        ),
-                      ),
-                    ],
+                  _IconChip(
+                    icon: Icons.speed_rounded,
+                    label: 'Playback speed ${_formatSpeed(controller.speed)}x',
+                    onTap: () => _showSpeedSheet(context, controller),
                   ),
-                  SizedBox(height: 14.h),
-                  _LiveQueuePanel(controller: controller),
                 ],
               ),
             ),
@@ -1066,7 +1168,16 @@ class _AudioPlayerSheet extends StatelessWidget {
               spacing: 8.w,
               runSpacing: 8.h,
               children: [
-                for (final speed in const [0.75, 1.0, 1.25, 1.5, 1.75, 2.0])
+                for (final speed in const [
+                  0.25,
+                  0.5,
+                  0.75,
+                  1.0,
+                  1.25,
+                  1.5,
+                  1.75,
+                  2.0,
+                ])
                   ChoiceChip(
                     label: Text('${_formatSpeed(speed)}x'),
                     selected: controller.speed == speed,
@@ -1089,95 +1200,15 @@ class _AudioPlayerSheet extends StatelessWidget {
   }
 }
 
-class _LiveQueuePanel extends StatefulWidget {
-  final AudioPlaybackController controller;
-
-  const _LiveQueuePanel({required this.controller});
-
-  @override
-  State<_LiveQueuePanel> createState() => _LiveQueuePanelState();
-}
-
-class _LiveQueuePanelState extends State<_LiveQueuePanel> {
-  final ScrollController _queueScrollController = ScrollController();
-  int _lastIndex = -1;
-
-  @override
-  void dispose() {
-    _queueScrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return AnimatedBuilder(
-      animation: widget.controller,
-      builder: (context, _) {
-        final queue = widget.controller.queue;
-        final currentIndex = widget.controller.currentIndex;
-        final playing = widget.controller.player.playing;
-        _scrollToCurrent(currentIndex);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const AmSectionHeader(label: 'Queue'),
-            Container(
-              height: 248.h.clamp(180.0, 320.0).toDouble(),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerHighest.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(8.r),
-                border: Border.all(color: colors.outlineVariant),
-              ),
-              child: ListView.builder(
-                controller: _queueScrollController,
-                primary: false,
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
-                itemCount: queue.length,
-                itemBuilder: (context, index) {
-                  return _QueueRow(
-                    index: index + 1,
-                    song: queue[index],
-                    active: index == currentIndex,
-                    playing: playing && index == currentIndex,
-                    onTap: () => widget.controller.playAt(index),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _scrollToCurrent(int currentIndex) {
-    if (currentIndex < 0 || currentIndex == _lastIndex) return;
-    _lastIndex = currentIndex;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_queueScrollController.hasClients) return;
-      final target = (currentIndex * 50.h).clamp(
-        0.0,
-        _queueScrollController.position.maxScrollExtent,
-      );
-      _queueScrollController.animateTo(
-        target.toDouble(),
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-}
-
 class _AudioProgressBar extends StatelessWidget {
   final AudioPlaybackController controller;
   final bool dense;
+  final bool showLabels;
 
   const _AudioProgressBar({
     required this.controller,
     this.dense = false,
+    this.showLabels = false,
   });
 
   @override
@@ -1197,6 +1228,10 @@ class _AudioProgressBar extends StatelessWidget {
                 ? 1.0
                 : duration.inMilliseconds.toDouble();
             final value = position.inMilliseconds.clamp(0, max).toDouble();
+            final displayPosition =
+                duration > Duration.zero && position > duration
+                    ? duration
+                    : position;
 
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -1215,18 +1250,25 @@ class _AudioProgressBar extends StatelessWidget {
                     activeColor: AppTheme.primary,
                     inactiveColor: colors.surfaceContainerHighest,
                     onChanged: (value) {
-                      controller.seek(Duration(milliseconds: value.round()));
+                      controller.player.seek(
+                        Duration(milliseconds: value.round()),
+                      );
+                    },
+                    onChangeEnd: (value) {
+                      controller.seek(
+                        Duration(milliseconds: value.round()),
+                      );
                     },
                   ),
                 ),
-                if (!dense)
+                if (!dense || showLabels)
                   Row(
                     children: [
                       Text(
-                        amFormatDuration(position),
+                        amFormatDuration(displayPosition),
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
-                          fontSize: 11.sp,
+                          fontSize: dense ? 10.sp : 11.sp,
                         ),
                       ),
                       const Spacer(),
@@ -1234,7 +1276,7 @@ class _AudioProgressBar extends StatelessWidget {
                         amFormatDuration(duration),
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
-                          fontSize: 11.sp,
+                          fontSize: dense ? 10.sp : 11.sp,
                         ),
                       ),
                     ],
@@ -1291,14 +1333,12 @@ class _PlayPauseButton extends StatelessWidget {
 class _MiniControl extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final bool active;
   final VoidCallback onPressed;
 
   const _MiniControl({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.active = false,
   });
 
   @override
@@ -1312,7 +1352,7 @@ class _MiniControl extends StatelessWidget {
         child: IconButton(
           padding: EdgeInsets.zero,
           visualDensity: VisualDensity.compact,
-          color: active ? AppTheme.primary : colors.onSurfaceVariant,
+          color: colors.onSurfaceVariant,
           icon: Icon(icon, size: 20.sp),
           onPressed: onPressed,
         ),
@@ -1424,87 +1464,6 @@ class _FolderBackHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _QueueRow extends StatelessWidget {
-  final int index;
-  final Song song;
-  final bool active;
-  final bool playing;
-  final VoidCallback onTap;
-
-  const _QueueRow({
-    required this.index,
-    required this.song,
-    required this.active,
-    required this.playing,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8.r),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: active
-              ? AppTheme.primary.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8.r),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 34.w,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '$index',
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: active ? AppTheme.primary : colors.onSurfaceVariant,
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-            Icon(
-              playing ? Icons.equalizer_rounded : Icons.music_note_rounded,
-              color: active ? AppTheme.primary : colors.onSurfaceVariant,
-              size: 16.sp,
-            ),
-            SizedBox(width: 8.w),
-            Expanded(
-              child: Text(
-                song.displayTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: active ? AppTheme.primary : colors.onSurface,
-                  fontSize: 12.sp,
-                  fontWeight: active ? FontWeight.w900 : FontWeight.w600,
-                ),
-              ),
-            ),
-            SizedBox(width: 8.w),
-            Text(
-              amFormatDuration(song.duration),
-              style: TextStyle(
-                color: active ? AppTheme.primary : colors.onSurfaceVariant,
-                fontSize: 10.sp,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

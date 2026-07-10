@@ -2,14 +2,18 @@ import 'dart:io';
 
 import 'package:am_player/models/video_folder.dart';
 import 'package:am_player/models/video_item.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite/sqflite.dart';
 
 class VideoLibraryRepository {
   static const _databaseName = 'am_player_media.db';
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 4;
+  static const _mediaStoreChannel = MethodChannel('am_player/media_store');
+  static const _videoSignatureKey = 'video_library_signature';
 
   Database? _database;
 
@@ -24,10 +28,17 @@ class VideoLibraryRepository {
       onCreate: (db, version) async {
         await _createVideosTable(db);
         await _createPlaybackPositionsTable(db);
+        await _createLibraryMetadataTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createPlaybackPositionsTable(db);
+        }
+        if (oldVersion < 3) {
+          await _createLibraryMetadataTable(db);
+        }
+        if (oldVersion < 4) {
+          await _createVideoPerformanceIndexes(db);
         }
       },
     );
@@ -117,17 +128,169 @@ class VideoLibraryRepository {
     return rows.map(VideoItem.fromMap).toList();
   }
 
-  Future<void> syncDeviceVideos() async {
-    final permission = await PhotoManager.requestPermissionExtend();
-    if (!permission.hasAccess) {
+  Future<bool> syncDeviceVideos({bool force = false}) async {
+    final hasPermission = await _ensureVideoPermission();
+    if (!hasPermission) {
       throw const VideoLibraryPermissionException();
     }
+    PhotoManager.setIgnorePermissionCheck(true);
 
+    final db = await _db;
+    final signature = await _queryVideoLibrarySignature();
+    if (!force && signature != null) {
+      final savedSignature = await _loadLibraryMetadata(
+        db,
+        _videoSignatureKey,
+      );
+      if (savedSignature == signature) return false;
+    } else if (!force && signature == null && await _hasCachedVideos(db)) {
+      return false;
+    }
+
+    final videos =
+        await _queryNativeVideos() ?? await _queryPhotoManagerVideos();
+
+    return db.transaction<bool>((txn) async {
+      var changed = false;
+      final existingRows = await txn.query('videos');
+      final existingById = <String, Map<String, Object?>>{
+        for (final row in existingRows) row['asset_id'] as String: row,
+      };
+      final batch = txn.batch();
+      for (final item in videos) {
+        final itemMap = item.toMap();
+        final existing = existingById.remove(item.assetId);
+        if (existing == null || !_storedRowMatches(existing, itemMap)) {
+          changed = true;
+          batch.insert(
+            'videos',
+            itemMap,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+      for (final staleAssetId in existingById.keys) {
+        changed = true;
+        batch.delete(
+          'videos',
+          where: 'asset_id = ?',
+          whereArgs: [staleAssetId],
+        );
+      }
+      if (signature != null) {
+        batch.insert(
+          'library_metadata',
+          {'key': _videoSignatureKey, 'value': signature},
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+      return changed;
+    });
+  }
+
+  Future<void> deleteVideo(VideoItem item) async {
+    final deletedIds = await PhotoManager.editor.deleteWithIds([item.assetId]);
+    if (!deletedIds.contains(item.assetId)) {
+      throw const VideoDeleteException();
+    }
+
+    final db = await _db;
+    await db.delete(
+      'videos',
+      where: 'asset_id = ?',
+      whereArgs: [item.assetId],
+    );
+    await clearPlaybackPosition(item.assetId);
+  }
+
+  Future<bool> _ensureVideoPermission() async {
+    if (!Platform.isAndroid) {
+      final permission = await PhotoManager.requestPermissionExtend(
+        requestOption: const PermissionRequestOption(
+          androidPermission: AndroidPermission(
+            type: RequestType.video,
+            mediaLocation: false,
+          ),
+        ),
+      );
+      return permission.hasAccess;
+    }
+
+    var status = await Permission.videos.status;
+    if (!status.isGranted && !status.isLimited) {
+      status = await Permission.videos.request();
+    }
+    if (status.isGranted || status.isLimited) return true;
+
+    var storageStatus = await Permission.storage.status;
+    if (!storageStatus.isGranted && !storageStatus.isLimited) {
+      storageStatus = await Permission.storage.request();
+    }
+    return storageStatus.isGranted || storageStatus.isLimited;
+  }
+
+  Future<String?> _queryVideoLibrarySignature() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      return await _mediaStoreChannel.invokeMethod<String>(
+        'videoLibrarySignature',
+      );
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<List<VideoItem>?> _queryNativeVideos() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final rawVideos = await _mediaStoreChannel.invokeListMethod<dynamic>(
+        'queryVideos',
+      );
+      if (rawVideos == null) return null;
+
+      final videos = <VideoItem>[];
+      for (final rawVideo in rawVideos) {
+        if (rawVideo is! Map) continue;
+        final assetId = (rawVideo['assetId'] as String? ?? '').trim();
+        final path = (rawVideo['path'] as String? ?? '').trim();
+        if (assetId.isEmpty || path.isEmpty) continue;
+        final folderId =
+            (rawVideo['folderId'] as String? ?? p.dirname(path)).trim();
+        final folderName =
+            (rawVideo['folderName'] as String? ?? p.basename(folderId)).trim();
+        final title = (rawVideo['title'] as String? ?? '').trim();
+
+        videos.add(
+          VideoItem(
+            assetId: assetId,
+            title: title.isEmpty ? p.basename(path) : title,
+            path: path,
+            folderId: folderId.isEmpty ? 'Videos' : folderId,
+            folderName: folderName.isEmpty ? 'Videos' : folderName,
+            durationMs: _readInt(rawVideo['durationMs']),
+            modifiedMs: _readInt(rawVideo['modifiedMs']),
+            width: _readInt(rawVideo['width']),
+            height: _readInt(rawVideo['height']),
+            sizeBytes: _readInt(rawVideo['sizeBytes']),
+          ),
+        );
+      }
+      return videos;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<List<VideoItem>> _queryPhotoManagerVideos() async {
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.video,
       hasAll: false,
     );
-    final foundAssetIds = <String>{};
     final videos = <VideoItem>[];
 
     for (final album in albums) {
@@ -139,67 +302,44 @@ class VideoLibraryRepository {
           page: page,
           size: pageSize,
         );
-
-        for (final asset in assets) {
-          final file = await asset.file;
-          if (file == null) continue;
-
-          final item = await _videoItemFromAsset(
-            asset: asset,
-            album: album,
-            file: file,
-          );
-          foundAssetIds.add(item.assetId);
-          videos.add(item);
-        }
+        videos.addAll(await _loadVideoPage(assets, album));
       }
     }
-
-    final db = await _db;
-    await db.transaction((txn) async {
-      final batch = txn.batch();
-      for (final item in videos) {
-        batch.insert(
-          'videos',
-          item.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      if (foundAssetIds.isEmpty) {
-        batch.delete('videos');
-      } else {
-        final placeholders = List.filled(foundAssetIds.length, '?').join(',');
-        batch.delete(
-          'videos',
-          where: 'asset_id NOT IN ($placeholders)',
-          whereArgs: foundAssetIds.toList(),
-        );
-      }
-      await batch.commit(noResult: true);
-    });
+    return videos;
   }
 
-  Future<void> renameVideo({
-    required VideoItem item,
-    required String newBaseName,
-  }) async {
-    final extension = p.extension(item.path);
-    final cleanName = newBaseName.trim();
-    if (cleanName.isEmpty) return;
+  int _readInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
 
-    final newPath = p.join(p.dirname(item.path), '$cleanName$extension');
-    final renamed = await File(item.path).rename(newPath);
-    final db = await _db;
-    await db.update(
-      'videos',
-      {
-        'title': p.basename(renamed.path),
-        'path': renamed.path,
-        'modified_ms': DateTime.now().millisecondsSinceEpoch,
-      },
-      where: 'asset_id = ?',
-      whereArgs: [item.assetId],
+  Future<String?> _loadLibraryMetadata(Database db, String key) async {
+    final rows = await db.query(
+      'library_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
     );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  Future<bool> _hasCachedVideos(Database db) async {
+    final rows = await db.rawQuery('SELECT COUNT(*) FROM videos');
+    return (Sqflite.firstIntValue(rows) ?? 0) > 0;
+  }
+
+  bool _storedRowMatches(
+    Map<String, Object?> stored,
+    Map<String, Object?> current,
+  ) {
+    for (final entry in current.entries) {
+      if (stored[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 
   Future<VideoItem> _videoItemFromAsset({
@@ -227,6 +367,38 @@ class VideoLibraryRepository {
     );
   }
 
+  Future<List<VideoItem>> _loadVideoPage(
+    List<AssetEntity> assets,
+    AssetPathEntity album,
+  ) async {
+    const concurrency = 8;
+    final items = <VideoItem>[];
+
+    for (var start = 0; start < assets.length; start += concurrency) {
+      final end = start + concurrency < assets.length
+          ? start + concurrency
+          : assets.length;
+      final chunk = assets.sublist(start, end);
+      final loaded = await Future.wait([
+        for (final asset in chunk) _loadVideoItem(asset, album),
+      ]);
+      for (final item in loaded) {
+        if (item != null) items.add(item);
+      }
+    }
+
+    return items;
+  }
+
+  Future<VideoItem?> _loadVideoItem(
+    AssetEntity asset,
+    AssetPathEntity album,
+  ) async {
+    final file = await asset.file;
+    if (file == null) return null;
+    return _videoItemFromAsset(asset: asset, album: album, file: file);
+  }
+
   Future<void> _createVideosTable(Database db) async {
     await db.execute('''
       CREATE TABLE videos (
@@ -248,6 +420,14 @@ class VideoLibraryRepository {
     await db.execute(
       'CREATE INDEX idx_videos_modified ON videos(modified_ms DESC)',
     );
+    await _createVideoPerformanceIndexes(db);
+  }
+
+  Future<void> _createVideoPerformanceIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_videos_folder_modified '
+      'ON videos(folder_id, modified_ms DESC)',
+    );
   }
 
   Future<void> _createPlaybackPositionsTable(Database db) async {
@@ -260,8 +440,21 @@ class VideoLibraryRepository {
       )
     ''');
   }
+
+  Future<void> _createLibraryMetadataTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS library_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+  }
 }
 
 class VideoLibraryPermissionException implements Exception {
   const VideoLibraryPermissionException();
+}
+
+class VideoDeleteException implements Exception {
+  const VideoDeleteException();
 }

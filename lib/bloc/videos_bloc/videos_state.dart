@@ -3,7 +3,6 @@ part of 'videos_bloc.dart';
 class VideosState extends Equatable {
   final List<VideoFolder> folders;
   final Map<String, List<VideoItem>> videosByFolder;
-  final VideoItem? currentVideo;
   final bool isLoading;
   final bool isSyncing;
   final bool permissionDenied;
@@ -12,7 +11,6 @@ class VideosState extends Equatable {
   const VideosState({
     this.folders = const [],
     this.videosByFolder = const {},
-    this.currentVideo,
     this.isLoading = true,
     this.isSyncing = false,
     this.permissionDenied = false,
@@ -28,8 +26,6 @@ class VideosState extends Equatable {
   VideosState copyWith({
     List<VideoFolder>? folders,
     Map<String, List<VideoItem>>? videosByFolder,
-    VideoItem? currentVideo,
-    bool clearCurrentVideo = false,
     bool? isLoading,
     bool? isSyncing,
     bool? permissionDenied,
@@ -39,8 +35,6 @@ class VideosState extends Equatable {
     return VideosState(
       folders: folders ?? this.folders,
       videosByFolder: videosByFolder ?? this.videosByFolder,
-      currentVideo:
-          clearCurrentVideo ? null : currentVideo ?? this.currentVideo,
       isLoading: isLoading ?? this.isLoading,
       isSyncing: isSyncing ?? this.isSyncing,
       permissionDenied: permissionDenied ?? this.permissionDenied,
@@ -52,7 +46,6 @@ class VideosState extends Equatable {
   List<Object?> get props => [
         folders,
         videosByFolder,
-        currentVideo,
         isLoading,
         isSyncing,
         permissionDenied,

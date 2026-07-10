@@ -54,7 +54,9 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
         await _restorePlaybackOnce(songs);
       }
 
-      if (event.refresh || songs.isEmpty) {
+      final shouldCheckLibrary =
+          event.refresh || songs.isNotEmpty || event.syncIfEmpty;
+      if (shouldCheckLibrary) {
         emit(
           state.copyWith(
             isLoading: songs.isEmpty,
@@ -63,8 +65,10 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
             errorMessage: null,
           ),
         );
-        await repository.syncDeviceAudio();
-        songs = await repository.loadSongs();
+        final changed = await repository.syncDeviceAudio(force: event.refresh);
+        if (changed || songs.isEmpty) {
+          songs = await repository.loadSongs();
+        }
         emit(
           state.copyWith(
             isLoading: false,
@@ -119,20 +123,34 @@ class SongsBloc extends Bloc<SongsEvent, SongsState> {
     PlaySongEvent event,
     Emitter<SongsState> emit,
   ) async {
-    final index = event.queue.indexWhere((song) => song.id == event.song.id);
-    await playback.playQueue(event.queue, index < 0 ? 0 : index);
+    try {
+      final index = event.queue.indexWhere((song) => song.id == event.song.id);
+      await playback.playQueue(event.queue, index < 0 ? 0 : index);
+      emit(state.copyWith(errorMessage: null));
+    } catch (_) {
+      emit(state.copyWith(errorMessage: 'Unable to play this audio file.'));
+    }
   }
 
   Future<void> _shuffleSongs(
     ShuffleSongsEvent event,
     Emitter<SongsState> emit,
   ) async {
-    await playback.shuffleAll(event.queue);
+    try {
+      await playback.shuffleAll(event.queue);
+      emit(state.copyWith(errorMessage: null));
+    } catch (_) {
+      emit(state.copyWith(errorMessage: 'Unable to start audio playback.'));
+    }
   }
 
   Future<void> _restorePlaybackOnce(List<Song> songs) async {
     if (_restoredPlayback || songs.isEmpty || playback.hasQueue) return;
-    _restoredPlayback = await playback.restore(songs);
+    try {
+      _restoredPlayback = await playback.restore(songs);
+    } catch (_) {
+      _restoredPlayback = true;
+    }
   }
 
   @override

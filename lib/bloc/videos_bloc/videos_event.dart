@@ -24,24 +24,11 @@ class OpenVideoFolderEvent extends VideosEvent {
   List<Object?> get props => [folderId];
 }
 
-class SelectVideoEvent extends VideosEvent {
+class DeleteVideoEvent extends VideosEvent {
   final VideoItem video;
 
-  const SelectVideoEvent(this.video);
+  const DeleteVideoEvent(this.video);
 
   @override
   List<Object?> get props => [video];
-}
-
-class RenameVideoEvent extends VideosEvent {
-  final VideoItem video;
-  final String newBaseName;
-
-  const RenameVideoEvent({
-    required this.video,
-    required this.newBaseName,
-  });
-
-  @override
-  List<Object?> get props => [video, newBaseName];
 }

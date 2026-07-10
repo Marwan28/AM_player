@@ -21,7 +21,7 @@ class AmTopBar extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onBack;
   final List<Widget> actions;
-  final bool showSearch;
+  final VoidCallback? onSearch;
 
   const AmTopBar({
     super.key,
@@ -29,7 +29,7 @@ class AmTopBar extends StatelessWidget {
     this.subtitle,
     this.onBack,
     this.actions = const [],
-    this.showSearch = false,
+    this.onSearch,
   });
 
   @override
@@ -83,11 +83,11 @@ class AmTopBar extends StatelessWidget {
               ],
             ),
           ),
-          if (showSearch)
+          if (onSearch != null)
             AmIconButton(
               icon: Icons.search_rounded,
               tooltip: 'Search',
-              onPressed: () {},
+              onPressed: onSearch!,
             ),
           ...actions,
         ],
@@ -194,7 +194,6 @@ class AmBottomNav extends StatelessWidget {
   static const items = [
     (Icons.movie_creation_outlined, 'Videos'),
     (Icons.music_note_rounded, 'Music'),
-    (Icons.image_outlined, 'Photos'),
     (Icons.settings_outlined, 'Settings'),
   ];
 

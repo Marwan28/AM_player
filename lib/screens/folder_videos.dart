@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:am_player/app_router.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:am_player/models/video_folder.dart';
@@ -8,6 +10,7 @@ import 'package:am_player/widgets/video_thumbnail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:share_plus/share_plus.dart';
 
 enum VideoSortMode { dateDesc, nameAsc, sizeDesc, durationDesc }
 
@@ -22,6 +25,9 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
   VideoFolder? folder;
   bool gridMode = false;
   VideoSortMode sortMode = VideoSortMode.dateDesc;
+  bool searchVisible = false;
+  final TextEditingController searchController = TextEditingController();
+  Timer? searchDebounce;
 
   @override
   void didChangeDependencies() {
@@ -29,8 +35,14 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is VideoFolder && folder?.id != args.id) {
       folder = args;
-      context.read<VideosBloc>().add(OpenVideoFolderEvent(args.id));
     }
+  }
+
+  @override
+  void dispose() {
+    searchDebounce?.cancel();
+    searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,99 +58,158 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
       );
     }
 
-    return Scaffold(
-      body: AmSurface(
-        child: Column(
-          children: [
-            AmTopBar(
-              title: currentFolder.name,
-              subtitle: '${currentFolder.count} items',
-              onBack: () => Navigator.pop(context),
-              showSearch: true,
-              actions: [
-                AmIconButton(
-                  icon: Icons.refresh_rounded,
-                  tooltip: 'Refresh',
-                  onPressed: () {
-                    context.read<VideosBloc>().add(const RefreshVideosEvent());
-                    context
-                        .read<VideosBloc>()
-                        .add(OpenVideoFolderEvent(currentFolder.id));
-                  },
-                ),
-              ],
-            ),
-            _FolderToolbar(
-              gridMode: gridMode,
-              onGridChanged: (value) => setState(() => gridMode = value),
-              sortMode: sortMode,
-              onSortChanged: (value) => setState(() => sortMode = value),
-            ),
-            Expanded(
-              child: BlocBuilder<VideosBloc, VideosState>(
+    return BlocListener<VideosBloc, VideosState>(
+      listenWhen: (previous, current) =>
+          previous.errorMessage != current.errorMessage &&
+          current.errorMessage != null,
+      listener: (context, state) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(state.errorMessage!)),
+        );
+      },
+      child: Scaffold(
+        body: AmSurface(
+          child: Column(
+            children: [
+              BlocBuilder<VideosBloc, VideosState>(
+                buildWhen: (previous, current) =>
+                    previous.folders != current.folders ||
+                    previous.videosByFolder != current.videosByFolder,
                 builder: (context, state) {
-                  final videos = state.videosForFolder(currentFolder.id);
-                  if (videos.isEmpty) {
-                    return const Center(
-                      child: CircularProgressIndicator(color: AppTheme.primary),
-                    );
-                  }
-
-                  final sortedVideos = _sortedVideos(videos);
-                  return CustomScrollView(
-                    slivers: [
-                      if (gridMode)
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(12.w, 4.h, 12.w, 16.h),
-                          sliver: SliverLayoutBuilder(
-                            builder: (context, constraints) {
-                              final width = constraints.crossAxisExtent;
-                              final columns = width > 640
-                                  ? 4
-                                  : width > 430
-                                      ? 3
-                                      : 2;
-                              return SliverGrid.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  childAspectRatio: 0.78,
-                                  crossAxisSpacing: 10.w,
-                                  mainAxisSpacing: 10.h,
-                                ),
-                                itemCount: sortedVideos.length,
-                                itemBuilder: (ctx, index) {
-                                  return _VideoGridTile(
-                                    video: sortedVideos[index],
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        )
-                      else
-                        SliverList.builder(
-                          itemCount: sortedVideos.length,
-                          itemBuilder: (ctx, index) {
-                            return _VideoRow(
-                              video: sortedVideos[index],
-                            );
-                          },
-                        ),
-                      SliverToBoxAdapter(child: SizedBox(height: 14.h)),
+                  final matchingFolders = state.folders.where(
+                    (item) => item.id == currentFolder.id,
+                  );
+                  final count = matchingFolders.isNotEmpty
+                      ? matchingFolders.first.count
+                      : state.videosForFolder(currentFolder.id).length;
+                  return AmTopBar(
+                    title: currentFolder.name,
+                    subtitle: '$count items',
+                    onBack: () => Navigator.pop(context),
+                    onSearch: () {
+                      setState(() => searchVisible = !searchVisible);
+                      if (!searchVisible) searchController.clear();
+                    },
+                    actions: [
+                      AmIconButton(
+                        icon: Icons.refresh_rounded,
+                        tooltip: 'Refresh',
+                        onPressed: () => context
+                            .read<VideosBloc>()
+                            .add(const RefreshVideosEvent()),
+                      ),
                     ],
                   );
                 },
               ),
-            ),
-          ],
+              if (searchVisible)
+                _VideoSearchBar(
+                  controller: searchController,
+                  onChanged: (_) {
+                    searchDebounce?.cancel();
+                    searchDebounce =
+                        Timer(const Duration(milliseconds: 120), () {
+                      if (mounted) setState(() {});
+                    });
+                  },
+                  onClose: () {
+                    searchDebounce?.cancel();
+                    searchController.clear();
+                    setState(() => searchVisible = false);
+                  },
+                ),
+              _FolderToolbar(
+                gridMode: gridMode,
+                onGridChanged: (value) => setState(() => gridMode = value),
+                sortMode: sortMode,
+                onSortChanged: (value) => setState(() => sortMode = value),
+              ),
+              Expanded(
+                child: BlocBuilder<VideosBloc, VideosState>(
+                  builder: (context, state) {
+                    final videos = state.videosForFolder(currentFolder.id);
+                    if (videos.isEmpty) {
+                      if (state.isSyncing) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                              color: AppTheme.primary),
+                        );
+                      }
+                      return const _FolderMessage(
+                        icon: Icons.video_library_outlined,
+                        message: 'No videos in this folder',
+                      );
+                    }
+
+                    final sortedVideos = _sortedVideos(videos);
+                    if (sortedVideos.isEmpty) {
+                      return const _FolderMessage(
+                        icon: Icons.search_off_rounded,
+                        message: 'No videos match your search',
+                      );
+                    }
+                    return CustomScrollView(
+                      cacheExtent: 600.h,
+                      slivers: [
+                        if (gridMode)
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(12.w, 4.h, 12.w, 16.h),
+                            sliver: SliverLayoutBuilder(
+                              builder: (context, constraints) {
+                                final width = constraints.crossAxisExtent;
+                                final columns = width > 640
+                                    ? 4
+                                    : width > 430
+                                        ? 3
+                                        : 2;
+                                return SliverGrid.builder(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: columns,
+                                    childAspectRatio: 0.78,
+                                    crossAxisSpacing: 10.w,
+                                    mainAxisSpacing: 10.h,
+                                  ),
+                                  itemCount: sortedVideos.length,
+                                  itemBuilder: (ctx, index) {
+                                    return _VideoGridTile(
+                                      video: sortedVideos[index],
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          )
+                        else
+                          SliverList.builder(
+                            itemCount: sortedVideos.length,
+                            itemBuilder: (ctx, index) {
+                              return _VideoRow(
+                                video: sortedVideos[index],
+                              );
+                            },
+                          ),
+                        SliverToBoxAdapter(child: SizedBox(height: 14.h)),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   List<VideoItem> _sortedVideos(List<VideoItem> videos) {
-    final sorted = [...videos];
+    final query = searchController.text.trim().toLowerCase();
+    final sorted = videos
+        .where(
+          (video) =>
+              query.isEmpty || video.displayTitle.toLowerCase().contains(query),
+        )
+        .toList();
     switch (sortMode) {
       case VideoSortMode.dateDesc:
         sorted.sort((a, b) => b.modifiedMs.compareTo(a.modifiedMs));
@@ -296,7 +367,6 @@ class _VideoRow extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () {
-        context.read<VideosBloc>().add(SelectVideoEvent(video));
         Navigator.pushNamed(context, AppRouter.playVideo, arguments: video);
       },
       child: Container(
@@ -315,6 +385,7 @@ class _VideoRow extends StatelessWidget {
                 children: [
                   VideoThumbnail(
                     assetId: video.assetId,
+                    cacheVersion: video.modifiedMs,
                     borderRadius: BorderRadius.circular(8.r),
                   ),
                   Center(
@@ -370,7 +441,7 @@ class _VideoRow extends StatelessWidget {
                   ),
                   SizedBox(height: 5.h),
                   Text(
-                    '${video.width}p - ${amFormatSize(video.sizeBytes)}',
+                    '${video.resolutionLabel} - ${amFormatSize(video.sizeBytes)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -384,20 +455,15 @@ class _VideoRow extends StatelessWidget {
                     runSpacing: 2.h,
                     children: [
                       _ActionChip(
-                        icon: Icons.drive_file_rename_outline_rounded,
-                        label: 'Rename',
-                        onTap: () => _showRenameDialog(context, video),
-                      ),
-                      _ActionChip(
                         icon: Icons.share_outlined,
                         label: 'Share',
-                        onTap: () {},
+                        onTap: () => _shareVideo(context, video),
                       ),
                       _ActionChip(
                         icon: Icons.delete_outline_rounded,
                         label: 'Delete',
                         danger: true,
-                        onTap: () {},
+                        onTap: () => _confirmDelete(context, video),
                       ),
                     ],
                   ),
@@ -410,39 +476,120 @@ class _VideoRow extends StatelessWidget {
     );
   }
 
-  void _showRenameDialog(BuildContext context, VideoItem video) {
-    final controller = TextEditingController(text: video.displayTitle);
+  Future<void> _shareVideo(BuildContext context, VideoItem video) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(video.path, mimeType: 'video/*')],
+          subject: video.displayTitle,
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to share this video.')),
+      );
+    }
+  }
 
-    showDialog<void>(
+  Future<void> _confirmDelete(BuildContext context, VideoItem video) async {
+    final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Rename video'),
-          content: TextField(
-            autofocus: true,
-            controller: controller,
-            decoration: const InputDecoration(labelText: 'Name'),
+          title: const Text('Delete video?'),
+          content: Text(
+            '${video.displayTitle} will be removed from your device.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
-                context.read<VideosBloc>().add(
-                      RenameVideoEvent(
-                        video: video,
-                        newBaseName: controller.text,
-                      ),
-                    );
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Save'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
             ),
           ],
         );
       },
+    );
+    if (shouldDelete == true && context.mounted) {
+      context.read<VideosBloc>().add(DeleteVideoEvent(video));
+    }
+  }
+}
+
+class _VideoSearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClose;
+
+  const _VideoSearchBar({
+    required this.controller,
+    required this.onChanged,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 0),
+      child: TextField(
+        controller: controller,
+        autofocus: true,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search this folder',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: IconButton(
+            tooltip: 'Close search',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+          ),
+          filled: true,
+          fillColor: colors.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.r),
+            borderSide: BorderSide(color: colors.outlineVariant),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.r),
+            borderSide: BorderSide(color: colors.outlineVariant),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FolderMessage extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const _FolderMessage({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 44.sp, color: colors.onSurfaceVariant),
+          SizedBox(height: 10.h),
+          Text(
+            message,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -458,7 +605,6 @@ class _VideoGridTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(8.r),
       onTap: () {
-        context.read<VideosBloc>().add(SelectVideoEvent(video));
         Navigator.pushNamed(context, AppRouter.playVideo, arguments: video);
       },
       child: Container(
@@ -476,6 +622,7 @@ class _VideoGridTile extends StatelessWidget {
                 children: [
                   VideoThumbnail(
                     assetId: video.assetId,
+                    cacheVersion: video.modifiedMs,
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(8.r),
                     ),

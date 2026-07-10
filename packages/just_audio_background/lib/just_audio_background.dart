@@ -542,6 +542,10 @@ class _PlayerAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> skipToPrevious() async {
+    if (currentPosition > const Duration(seconds: 3)) {
+      await seek(Duration.zero);
+      return;
+    }
     if (hasPrevious) {
       await skipToQueueItem(previousIndex);
     }
@@ -617,16 +621,15 @@ class _PlayerAudioHandler extends BaseAudioHandler
     if (_justAudioEvent.processingState == ProcessingStateMessage.idle) {
       return;
     }
+    final platformPlayer = await _player;
     _updatePosition();
     _playing = false;
-    _broadcastState();
-    // TODO: We should really stop listening to events here to mimic
-    // just_audio's behaviour. E.g. if stop() was called, we actually want to
-    // keep the state around even though the platform may be disposing its own
-    // state.
-    _platform.disposePlayer(DisposePlayerRequest(id: (await _player).id));
     _justAudioEvent = _justAudioEvent.copyWith(
       processingState: ProcessingStateMessage.idle,
+    );
+    _broadcastState();
+    await _platform.disposePlayer(
+      DisposePlayerRequest(id: platformPlayer.id),
     );
   }
 

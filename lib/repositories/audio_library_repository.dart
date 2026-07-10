@@ -11,8 +11,9 @@ import 'package:sqflite/sqflite.dart';
 
 class AudioLibraryRepository {
   static const _databaseName = 'am_player_audio.db';
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 4;
   static const _mediaStoreChannel = MethodChannel('am_player/media_store');
+  static const _audioSignatureKey = 'audio_library_signature';
   static const _audioExtensions = {
     '.mp3',
     '.m4a',
@@ -43,6 +44,8 @@ class AudioLibraryRepository {
       onCreate: (db, version) async {
         await _createAudioTracksTable(db);
         await _createAudioPlaybackStateTable(db);
+        await _createAudioPlaybackQueueTable(db);
+        await _createAudioLibraryMetadataTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -50,6 +53,12 @@ class AudioLibraryRepository {
             'ALTER TABLE audio_playback_state '
             'ADD COLUMN was_playing INTEGER NOT NULL DEFAULT 0',
           );
+        }
+        if (oldVersion < 3) {
+          await _createAudioPlaybackQueueTable(db);
+        }
+        if (oldVersion < 4) {
+          await _createAudioLibraryMetadataTable(db);
         }
       },
     );
@@ -66,23 +75,40 @@ class AudioLibraryRepository {
     return rows.map(Song.fromMap).toList();
   }
 
-  Future<void> syncDeviceAudio() async {
+  Future<bool> syncDeviceAudio({bool force = false}) async {
     final audioQuery = OnAudioQuery();
     final hasPermission = await _ensureAudioPermission(audioQuery);
     if (!hasPermission) {
       throw const AudioLibraryPermissionException();
     }
 
+    final db = await _db;
+    final signature = await _queryAudioLibrarySignature();
+    if (!force) {
+      if (signature != null) {
+        final savedSignature = await _loadLibraryMetadata(
+          db,
+          _audioSignatureKey,
+        );
+        if (savedSignature == signature) return false;
+      } else if (await _hasCachedSongs(db)) {
+        return false;
+      }
+    }
+
     final songsByPath = <String, Song>{};
-    final pluginSongs = await _queryPluginAudio(audioQuery);
-    final nativeSongs = await _queryNativeAudio();
+    final nativeResult = await _queryNativeAudio();
+    final nativeSongs = nativeResult ?? const <Song>[];
+    final pluginSongs = nativeResult == null
+        ? await _queryPluginAudio(audioQuery)
+        : const <Song>[];
 
     for (final song in [...pluginSongs, ...nativeSongs]) {
       songsByPath[_normalizePath(song.filePath)] = song;
     }
 
     var fileSystemSongs = <Song>[];
-    if (songsByPath.isEmpty) {
+    if (songsByPath.isEmpty && nativeResult == null) {
       fileSystemSongs = await _scanFileSystemAudio();
       for (final song in fileSystemSongs) {
         songsByPath[_normalizePath(song.filePath)] = song;
@@ -96,34 +122,42 @@ class AudioLibraryRepository {
       'native=${nativeSongs.length}, files=${fileSystemSongs.length}, '
       'saved=${songs.length}',
     );
-    final foundAssetIds = <String>{};
-
-    for (final song in songs) {
-      foundAssetIds.add(song.id);
-    }
-
-    final db = await _db;
-    await db.transaction((txn) async {
+    return db.transaction<bool>((txn) async {
+      var changed = false;
+      final existingRows = await txn.query('audio_tracks');
+      final existingById = <String, Map<String, Object?>>{
+        for (final row in existingRows) row['asset_id'] as String: row,
+      };
       final batch = txn.batch();
       for (final song in songs) {
-        batch.insert(
+        final songMap = song.toMap();
+        final existing = existingById.remove(song.id);
+        if (existing == null || !_storedRowMatches(existing, songMap)) {
+          changed = true;
+          batch.insert(
+            'audio_tracks',
+            songMap,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+      for (final staleAssetId in existingById.keys) {
+        changed = true;
+        batch.delete(
           'audio_tracks',
-          song.toMap(),
+          where: 'asset_id = ?',
+          whereArgs: [staleAssetId],
+        );
+      }
+      if (signature != null) {
+        batch.insert(
+          'audio_library_metadata',
+          {'key': _audioSignatureKey, 'value': signature},
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
-
-      if (foundAssetIds.isEmpty) {
-        batch.delete('audio_tracks');
-      } else {
-        final placeholders = List.filled(foundAssetIds.length, '?').join(',');
-        batch.delete(
-          'audio_tracks',
-          where: 'asset_id NOT IN ($placeholders)',
-          whereArgs: foundAssetIds.toList(),
-        );
-      }
       await batch.commit(noResult: true);
+      return changed;
     });
   }
 
@@ -161,14 +195,15 @@ class AudioLibraryRepository {
     }
   }
 
-  Future<List<Song>> _queryNativeAudio() async {
-    if (!Platform.isAndroid) return const [];
+  Future<List<Song>?> _queryNativeAudio() async {
+    if (!Platform.isAndroid) return null;
 
     try {
       final rawSongs = await _mediaStoreChannel.invokeListMethod<dynamic>(
         'queryAudio',
       );
-      if (rawSongs == null || rawSongs.isEmpty) return const [];
+      if (rawSongs == null) return null;
+      if (rawSongs.isEmpty) return const [];
 
       final songs = <Song>[];
       for (final rawSong in rawSongs) {
@@ -203,8 +238,48 @@ class AudioLibraryRepository {
       return songs;
     } catch (error) {
       debugPrint('AM audio sync: native MediaStore failed: $error');
-      return const [];
+      return null;
     }
+  }
+
+  Future<String?> _queryAudioLibrarySignature() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      return await _mediaStoreChannel.invokeMethod<String>(
+        'audioLibrarySignature',
+      );
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<String?> _loadLibraryMetadata(Database db, String key) async {
+    final rows = await db.query(
+      'audio_library_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  Future<bool> _hasCachedSongs(Database db) async {
+    final rows = await db.rawQuery('SELECT COUNT(*) FROM audio_tracks');
+    return (Sqflite.firstIntValue(rows) ?? 0) > 0;
+  }
+
+  bool _storedRowMatches(
+    Map<String, Object?> stored,
+    Map<String, Object?> current,
+  ) {
+    for (final entry in current.entries) {
+      if (stored[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 
   Future<List<Song>> _scanFileSystemAudio() async {
@@ -254,7 +329,33 @@ class AudioLibraryRepository {
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    return AudioPlaybackSnapshot.fromMap(rows.first);
+    final queueRows = await db.query(
+      'audio_playback_queue',
+      columns: ['asset_id'],
+      orderBy: 'queue_index ASC',
+    );
+    return AudioPlaybackSnapshot.fromMap(
+      rows.first,
+      queueAssetIds: [
+        for (final row in queueRows)
+          if (row['asset_id'] case final String assetId) assetId,
+      ],
+    );
+  }
+
+  Future<void> savePlaybackQueue(List<String> assetIds) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.delete('audio_playback_queue');
+      final batch = txn.batch();
+      for (var index = 0; index < assetIds.length; index++) {
+        batch.insert(
+          'audio_playback_queue',
+          {'queue_index': index, 'asset_id': assetIds[index]},
+        );
+      }
+      await batch.commit(noResult: true);
+    });
   }
 
   Future<void> savePlaybackSnapshot({
@@ -333,6 +434,7 @@ class AudioLibraryRepository {
     final normalized = cleanPath.replaceAll('\\', '/').toLowerCase();
     if (normalized.contains('/android/data/')) return false;
     if (p.basename(normalized).startsWith('._')) return false;
+    if (normalized.startsWith('content://')) return true;
 
     return _audioExtensions.contains(p.extension(normalized));
   }
@@ -391,6 +493,24 @@ class AudioLibraryRepository {
       )
     ''');
   }
+
+  Future<void> _createAudioPlaybackQueueTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS audio_playback_queue (
+        queue_index INTEGER PRIMARY KEY,
+        asset_id TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _createAudioLibraryMetadataTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS audio_library_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+  }
 }
 
 class AudioPlaybackSnapshot {
@@ -400,6 +520,7 @@ class AudioPlaybackSnapshot {
   final String repeatMode;
   final double speed;
   final bool wasPlaying;
+  final List<String> queueAssetIds;
 
   const AudioPlaybackSnapshot({
     required this.assetId,
@@ -408,9 +529,13 @@ class AudioPlaybackSnapshot {
     required this.repeatMode,
     required this.speed,
     required this.wasPlaying,
+    required this.queueAssetIds,
   });
 
-  factory AudioPlaybackSnapshot.fromMap(Map<String, Object?> map) {
+  factory AudioPlaybackSnapshot.fromMap(
+    Map<String, Object?> map, {
+    List<String> queueAssetIds = const [],
+  }) {
     return AudioPlaybackSnapshot(
       assetId: map['asset_id'] as String?,
       position: Duration(
@@ -420,6 +545,7 @@ class AudioPlaybackSnapshot {
       repeatMode: map['repeat_mode'] as String? ?? 'all',
       speed: (map['speed'] as num?)?.toDouble() ?? 1,
       wasPlaying: ((map['was_playing'] as num?)?.toInt() ?? 0) == 1,
+      queueAssetIds: List.unmodifiable(queueAssetIds),
     );
   }
 }

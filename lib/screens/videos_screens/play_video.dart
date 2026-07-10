@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:am_player/models/video_item.dart';
 import 'package:am_player/repositories/video_library_repository.dart';
 import 'package:am_player/theme/app_theme.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 import 'package:simple_pip_mode/actions/pip_action.dart';
@@ -14,17 +17,31 @@ import 'package:simple_pip_mode/simple_pip.dart';
 
 enum _VideoEndMode { playNext, repeatOne }
 
-class PlayVideoScreen extends StatefulWidget {
-  final VideoItem? initialVideo;
+class _PlaybackPositionSnapshot {
+  final String assetId;
+  final Duration position;
+  final Duration duration;
 
-  const PlayVideoScreen({Key? key, this.initialVideo}) : super(key: key);
+  const _PlaybackPositionSnapshot({
+    required this.assetId,
+    required this.position,
+    required this.duration,
+  });
+}
+
+class PlayVideoScreen extends StatefulWidget {
+  final VideoItem initialVideo;
+
+  const PlayVideoScreen({super.key, required this.initialVideo});
 
   @override
   State<PlayVideoScreen> createState() => _PlayVideoScreenState();
 }
 
-class _PlayVideoScreenState extends State<PlayVideoScreen> {
+class _PlayVideoScreenState extends State<PlayVideoScreen>
+    with WidgetsBindingObserver {
   final VideoLibraryRepository repository = VideoLibraryRepository();
+  final GlobalKey videoViewKey = GlobalKey();
 
   late final SimplePip pip;
   late final mk.Player player;
@@ -33,6 +50,7 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
 
   StreamSubscription<bool>? playingSubscription;
   StreamSubscription<bool>? completedSubscription;
+  StreamSubscription<String>? errorSubscription;
   Timer? hideTimer;
   Timer? positionSaveTimer;
 
@@ -40,16 +58,23 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   bool isInPip = false;
   bool opening = true;
   bool handlingCompletion = false;
+  bool savingPosition = false;
+  _PlaybackPositionSnapshot? pendingPositionSave;
   bool controlsLocked = false;
   bool showSpeedChoices = false;
   bool showRemainingTime = true;
   double playbackRate = 1.0;
   BoxFit videoFit = BoxFit.contain;
   _VideoEndMode endMode = _VideoEndMode.playNext;
+  String? playbackError;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+    );
     pip = SimplePip(
       onPipEntered: _onPipEntered,
       onPipExited: _onPipExited,
@@ -57,8 +82,7 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
     );
     unawaited(pip.setPipActionsLayout(PipActionsLayout.mediaWithSeek10));
 
-    video =
-        widget.initialVideo ?? context.read<VideosBloc>().state.currentVideo!;
+    video = widget.initialVideo;
     player = mk.Player();
     controller = mkv.VideoController(player);
 
@@ -68,38 +92,82 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
     completedSubscription = player.stream.completed.listen((completed) {
       if (completed) unawaited(_handleVideoCompleted());
     });
+    errorSubscription = player.stream.error.listen((error) {
+      if (!mounted || error.trim().isEmpty) return;
+      setState(() {
+        opening = false;
+        showControls = false;
+        playbackError = 'This video could not be played.';
+      });
+    });
 
     positionSaveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _savePlaybackPosition();
     });
 
-    _openVideo(resume: true);
+    unawaited(_openVideo(resume: true));
     _scheduleHideControls();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _savePlaybackPosition();
     hideTimer?.cancel();
     positionSaveTimer?.cancel();
     playingSubscription?.cancel();
     completedSubscription?.cancel();
+    errorSubscription?.cancel();
     player.dispose();
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _savePlaybackPosition();
+        break;
+      case AppLifecycleState.resumed:
+        break;
+    }
+  }
+
   Future<void> _openVideo({required bool resume}) async {
-    setState(() => opening = true);
-    final savedPosition = resume
-        ? await repository.loadPlaybackPosition(video.assetId)
-        : Duration.zero;
-    final startPosition = await _resolveStartPosition(savedPosition);
-    await player.open(
-      mk.Media(video.path, start: startPosition),
-      play: true,
-    );
-    if (!mounted) return;
-    setState(() => opening = false);
+    if (mounted) {
+      setState(() {
+        opening = true;
+        showControls = true;
+        playbackError = null;
+      });
+    }
+    try {
+      final savedPosition = resume
+          ? await repository.loadPlaybackPosition(video.assetId)
+          : Duration.zero;
+      final startPosition = await _resolveStartPosition(savedPosition);
+      if (!mounted) return;
+      await player.open(
+        mk.Media(video.path, start: startPosition),
+        play: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        opening = false;
+        playbackError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        opening = false;
+        showControls = false;
+        playbackError = 'This video could not be played.';
+      });
+    }
   }
 
   Future<Duration> _resolveStartPosition(Duration savedPosition) async {
@@ -156,32 +224,32 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   Future<void> _handleVideoCompleted() async {
     if (handlingCompletion) return;
     handlingCompletion = true;
-    await repository.clearPlaybackPosition(video.assetId);
+    try {
+      await repository.clearPlaybackPosition(video.assetId);
 
-    if (endMode == _VideoEndMode.repeatOne) {
-      await player.seek(Duration.zero);
-      await player.play();
+      if (endMode == _VideoEndMode.repeatOne) {
+        await player.seek(Duration.zero);
+        await player.play();
+        return;
+      }
+
+      final nextVideo = _nextVideo();
+      if (nextVideo == null) {
+        await player.seek(player.state.duration);
+        return;
+      }
+
+      video = nextVideo;
+      if (mounted) {
+        setState(() {
+          showControls = true;
+          opening = true;
+        });
+      }
+      await _openVideo(resume: false);
+    } finally {
       handlingCompletion = false;
-      return;
     }
-
-    final nextVideo = _nextVideo();
-    if (nextVideo == null) {
-      await player.seek(player.state.duration);
-      handlingCompletion = false;
-      return;
-    }
-
-    video = nextVideo;
-    if (mounted) {
-      context.read<VideosBloc>().add(SelectVideoEvent(nextVideo));
-      setState(() {
-        showControls = true;
-        opening = true;
-      });
-    }
-    await _openVideo(resume: false);
-    handlingCompletion = false;
   }
 
   VideoItem? _nextVideo() {
@@ -198,13 +266,39 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   }
 
   void _savePlaybackPosition() {
-    unawaited(
-      repository.savePlaybackPosition(
-        assetId: video.assetId,
-        position: player.state.position,
-        duration: player.state.duration,
-      ),
+    if (opening) return;
+    final snapshot = _PlaybackPositionSnapshot(
+      assetId: video.assetId,
+      position: player.state.position,
+      duration: player.state.duration,
     );
+    if (savingPosition) {
+      pendingPositionSave = snapshot;
+      return;
+    }
+    unawaited(_persistPlaybackPosition(snapshot));
+  }
+
+  Future<void> _persistPlaybackPosition(
+    _PlaybackPositionSnapshot snapshot,
+  ) async {
+    savingPosition = true;
+    try {
+      await repository.savePlaybackPosition(
+        assetId: snapshot.assetId,
+        position: snapshot.position,
+        duration: snapshot.duration,
+      );
+    } catch (error) {
+      debugPrint('AM video position save failed: $error');
+    } finally {
+      savingPosition = false;
+      final pending = pendingPositionSave;
+      pendingPositionSave = null;
+      if (pending != null) {
+        unawaited(_persistPlaybackPosition(pending));
+      }
+    }
   }
 
   void _toggleControls() {
@@ -250,7 +344,15 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   }
 
   Future<void> _enterPip() async {
-    if (!await SimplePip.isPipAvailable) return;
+    if (!await SimplePip.isPipAvailable) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Picture in picture is not available on this device.'),
+        ),
+      );
+      return;
+    }
     hideTimer?.cancel();
 
     if (mounted) {
@@ -265,7 +367,15 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;
 
-    final entered = await pip.enterPipMode(seamlessResize: true);
+    var entered = false;
+    try {
+      entered = await pip.enterPipMode(
+        aspectRatio: _pipAspectRatio(),
+        seamlessResize: true,
+      );
+    } catch (_) {
+      entered = false;
+    }
     if (!entered && mounted) {
       setState(() {
         isInPip = false;
@@ -273,6 +383,14 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
       });
       _scheduleHideControls();
     }
+  }
+
+  (int, int) _pipAspectRatio() {
+    if (video.width <= 0 || video.height <= 0) return (16, 9);
+    final ratio = video.width / video.height;
+    if (ratio > 2.39) return (239, 100);
+    if (ratio < 1 / 2.39) return (100, 239);
+    return (video.width, video.height);
   }
 
   void _onPipEntered() {
@@ -348,42 +466,142 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
     _scheduleHideControls();
   }
 
-  void _showSubtitlesSheet() {
+  Future<void> _showSubtitlesSheet() async {
     _scheduleHideControls();
-    _showPlayerSheet(
-      title: 'Subtitles',
-      children: const [
-        _SheetTile(
-          icon: Icons.subtitles_off_rounded,
-          title: 'No subtitles loaded',
-          subtitle: 'External subtitle loading will be connected next.',
-        ),
-        _SheetTile(
-          icon: Icons.folder_open_rounded,
-          title: 'Open subtitle file',
-          subtitle: 'Choose .srt or .vtt',
-        ),
-      ],
+    final tracks = player.state.tracks.subtitle
+        .where((track) => track.id != 'auto' && track.id != 'no')
+        .toList();
+    final selectedId = player.state.track.subtitle.id;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF171A21),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(8, 4, 8, 8),
+                child: Text(
+                  'Subtitles',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.subtitles_off_rounded,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Off',
+                  style: TextStyle(color: Colors.white),
+                ),
+                trailing: selectedId == 'no'
+                    ? const Icon(Icons.check_rounded, color: AppTheme.primary)
+                    : null,
+                onTap: () async {
+                  await player.setSubtitleTrack(mk.SubtitleTrack.no());
+                  if (sheetContext.mounted) Navigator.pop(sheetContext);
+                },
+              ),
+              for (var i = 0; i < tracks.length; i++)
+                ListTile(
+                  leading: const Icon(
+                    Icons.subtitles_rounded,
+                    color: Colors.white70,
+                  ),
+                  title: Text(
+                    _subtitleTrackLabel(tracks[i], i),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  trailing: selectedId == tracks[i].id
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppTheme.primary,
+                        )
+                      : null,
+                  onTap: () async {
+                    await player.setSubtitleTrack(tracks[i]);
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(
+                  Icons.folder_open_rounded,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Open subtitle file',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'SRT, VTT, ASS, or SSA',
+                  style: TextStyle(color: Colors.white60),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_pickExternalSubtitle());
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  void _showCastSheet() {
-    _scheduleHideControls();
-    _showPlayerSheet(
-      title: 'Cast',
-      children: const [
-        _SheetTile(
-          icon: Icons.cast_connected_rounded,
-          title: 'No cast devices found',
-          subtitle: 'Make sure your TV is on the same Wi-Fi network.',
-        ),
-        _SheetTile(
-          icon: Icons.refresh_rounded,
-          title: 'Scan again',
-          subtitle: 'Search for nearby playback devices',
-        ),
-      ],
-    );
+  String _subtitleTrackLabel(mk.SubtitleTrack track, int index) {
+    final title = track.title?.trim();
+    if (title != null && title.isNotEmpty) return title;
+    final language = track.language?.trim();
+    if (language != null && language.isNotEmpty) return language.toUpperCase();
+    return 'Subtitle ${index + 1}';
+  }
+
+  Future<void> _pickExternalSubtitle() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['srt', 'vtt', 'ass', 'ssa'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.single;
+      if (file.path != null && file.path!.isNotEmpty) {
+        await player.setSubtitleTrack(
+          mk.SubtitleTrack.uri(file.path!, title: file.name),
+        );
+      } else if (file.bytes != null) {
+        await player.setSubtitleTrack(
+          mk.SubtitleTrack.data(
+            utf8.decode(file.bytes!, allowMalformed: true),
+            title: file.name,
+          ),
+        );
+      } else {
+        throw StateError('Subtitle file is unavailable.');
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${file.name} loaded')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to load this subtitle file.')),
+      );
+    }
   }
 
   void _showMoreSheet() {
@@ -394,7 +612,8 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
         _SheetTile(
           icon: Icons.info_outline_rounded,
           title: video.displayTitle,
-          subtitle: '${video.width}x${video.height} - ${video.folderName}',
+          subtitle:
+              '${video.resolutionLabel} - ${video.width}x${video.height} - ${video.folderName}',
         ),
         _SheetTile(
           icon: endMode == _VideoEndMode.playNext
@@ -456,9 +675,12 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
       color: Colors.black,
       child: SizedBox.expand(
         child: mkv.Video(
+          key: videoViewKey,
           controller: controller,
           fit: BoxFit.contain,
           controls: mkv.NoVideoControls,
+          pauseUponEnteringBackgroundMode: false,
+          resumeUponEnteringForegroundMode: false,
         ),
       ),
     );
@@ -474,12 +696,21 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
           children: [
             Positioned.fill(
               child: mkv.Video(
+                key: videoViewKey,
                 controller: controller,
                 fit: videoFit,
                 controls: mkv.NoVideoControls,
+                pauseUponEnteringBackgroundMode: true,
+                resumeUponEnteringForegroundMode: false,
               ),
             ),
             _LoadingLayer(player: player, opening: opening),
+            if (playbackError != null)
+              _PlaybackErrorLayer(
+                message: playbackError!,
+                onRetry: () => _openVideo(resume: true),
+                onBack: () => Navigator.pop(context),
+              ),
             AnimatedOpacity(
               opacity: showControls ? 1 : 0,
               duration: const Duration(milliseconds: 180),
@@ -501,7 +732,6 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
                   onToggleSpeedChoices: _toggleSpeedChoices,
                   onToggleTimeMode: _toggleTimeMode,
                   onSubtitles: _showSubtitlesSheet,
-                  onCast: _showCastSheet,
                   onMore: _showMoreSheet,
                   onRateSelected: _setRate,
                   showRemainingTime: showRemainingTime,
@@ -554,6 +784,67 @@ class _LoadingLayer extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _PlaybackErrorLayer extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  final VoidCallback onBack;
+
+  const _PlaybackErrorLayer({
+    required this.message,
+    required this.onRetry,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.88),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: Colors.white70,
+                  size: 48,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  children: [
+                    OutlinedButton(
+                      onPressed: onBack,
+                      child: const Text('Back'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -619,7 +910,6 @@ class _VideoControls extends StatelessWidget {
   final VoidCallback onToggleSpeedChoices;
   final VoidCallback onToggleTimeMode;
   final VoidCallback onSubtitles;
-  final VoidCallback onCast;
   final VoidCallback onMore;
   final ValueChanged<double> onRateSelected;
   final VoidCallback onSeekBack;
@@ -643,7 +933,6 @@ class _VideoControls extends StatelessWidget {
     required this.onToggleSpeedChoices,
     required this.onToggleTimeMode,
     required this.onSubtitles,
-    required this.onCast,
     required this.onMore,
     required this.onRateSelected,
     required this.onSeekBack,
@@ -698,7 +987,6 @@ class _VideoControls extends StatelessWidget {
                 onToggleFit: onToggleFit,
                 onToggleEndMode: onToggleEndMode,
                 onSubtitles: onSubtitles,
-                onCast: onCast,
                 onMore: onMore,
               ),
               Center(
@@ -759,7 +1047,6 @@ class _VideoControls extends StatelessWidget {
                   onToggleSpeedChoices: onToggleSpeedChoices,
                   onToggleLock: onToggleLock,
                   onToggleTimeMode: onToggleTimeMode,
-                  onSubtitles: onSubtitles,
                   showRemainingTime: showRemainingTime,
                   compact: compact,
                 ),
@@ -782,7 +1069,6 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onToggleFit;
   final VoidCallback onToggleEndMode;
   final VoidCallback onSubtitles;
-  final VoidCallback onCast;
   final VoidCallback onMore;
 
   const _TopBar({
@@ -795,7 +1081,6 @@ class _TopBar extends StatelessWidget {
     required this.onToggleFit,
     required this.onToggleEndMode,
     required this.onSubtitles,
-    required this.onCast,
     required this.onMore,
   });
 
@@ -833,7 +1118,7 @@ class _TopBar extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Audio - Local - ${isCover ? 'Fill' : 'Fit'}',
+                      'Video - Local - ${isCover ? 'Fill' : 'Fit'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -876,13 +1161,6 @@ class _TopBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 _GlassIconButton(
-                  tooltip: 'Cast',
-                  icon: Icons.cast_rounded,
-                  onPressed: onCast,
-                  size: compact ? 34 : 38,
-                ),
-                const SizedBox(width: 6),
-                _GlassIconButton(
                   tooltip: endMode == _VideoEndMode.playNext
                       ? 'Play next'
                       : 'Repeat this video',
@@ -916,7 +1194,6 @@ class _ProgressBar extends StatelessWidget {
   final VoidCallback onToggleSpeedChoices;
   final VoidCallback onToggleLock;
   final VoidCallback onToggleTimeMode;
-  final VoidCallback onSubtitles;
   final bool showRemainingTime;
   final bool compact;
 
@@ -928,7 +1205,6 @@ class _ProgressBar extends StatelessWidget {
     required this.onToggleSpeedChoices,
     required this.onToggleLock,
     required this.onToggleTimeMode,
-    required this.onSubtitles,
     required this.showRemainingTime,
     required this.compact,
   });
@@ -957,6 +1233,7 @@ class _ProgressBar extends StatelessWidget {
             final remaining = duration > displayPosition
                 ? duration - displayPosition
                 : Duration.zero;
+            final displayRemaining = _ceilToSecond(remaining);
 
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -971,6 +1248,7 @@ class _ProgressBar extends StatelessWidget {
                         runSpacing: 6,
                         children: [
                           for (final speed in const [
+                            0.25,
                             0.5,
                             0.75,
                             1.0,
@@ -1056,7 +1334,7 @@ class _ProgressBar extends StatelessWidget {
                                       const EdgeInsets.symmetric(vertical: 4),
                                   child: Text(
                                     showRemainingTime
-                                        ? '-${_formatDuration(remaining)}'
+                                        ? '-${_formatDuration(displayRemaining)}'
                                         : _formatDuration(duration),
                                     style: TextStyle(
                                       color: Colors.white70,
@@ -1078,12 +1356,6 @@ class _ProgressBar extends StatelessWidget {
                               onPressed: onToggleSpeedChoices,
                             ),
                             const Spacer(),
-                            _UtilityButton(
-                              icon: Icons.subtitles_rounded,
-                              label: 'Subtitles',
-                              onPressed: onSubtitles,
-                            ),
-                            const SizedBox(width: 6),
                             _UtilityButton(
                               icon: Icons.lock_rounded,
                               label: 'Lock',
@@ -1110,6 +1382,13 @@ class _ProgressBar extends StatelessWidget {
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     if (hours == 0) return '$minutes:$seconds';
     return '${twoDigits(hours)}:$minutes:$seconds';
+  }
+
+  static Duration _ceilToSecond(Duration duration) {
+    if (duration <= Duration.zero) return Duration.zero;
+    final milliseconds = duration.inMilliseconds;
+    final seconds = (milliseconds / 1000).ceil();
+    return Duration(seconds: seconds);
   }
 
   static String _formatRate(double rate) {

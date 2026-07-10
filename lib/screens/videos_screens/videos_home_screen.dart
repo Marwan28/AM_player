@@ -23,7 +23,7 @@ class _VideosHomeScreenState extends State<VideosHomeScreen>
 
     return BlocBuilder<VideosBloc, VideosState>(
       builder: (context, state) {
-        if (state.isLoading && state.folders.isEmpty) {
+        if ((state.isLoading || state.isSyncing) && state.folders.isEmpty) {
           return const _CenteredProgress();
         }
 
@@ -54,10 +54,9 @@ class _VideosHomeScreenState extends State<VideosHomeScreen>
         }
 
         return RefreshIndicator(
-          onRefresh: () async {
-            context.read<VideosBloc>().add(const RefreshVideosEvent());
-          },
+          onRefresh: _refreshVideos,
           child: CustomScrollView(
+            cacheExtent: 500.h,
             slivers: [
               SliverToBoxAdapter(
                 child: _SyncStrip(
@@ -84,6 +83,20 @@ class _VideosHomeScreenState extends State<VideosHomeScreen>
 
   @override
   bool get wantKeepAlive => true;
+
+  Future<void> _refreshVideos() async {
+    final bloc = context.read<VideosBloc>();
+    if (!bloc.state.isSyncing) {
+      bloc.add(const RefreshVideosEvent());
+    }
+    try {
+      await bloc.stream
+          .firstWhere((state) => !state.isSyncing)
+          .timeout(const Duration(seconds: 45));
+    } catch (_) {
+      return;
+    }
+  }
 }
 
 class _SyncStrip extends StatelessWidget {
@@ -163,6 +176,7 @@ class _FolderRow extends StatelessWidget {
                 children: [
                   VideoThumbnail(
                     assetId: folder.coverAssetId,
+                    cacheVersion: folder.latestModifiedMs,
                     borderRadius: BorderRadius.circular(8.r),
                   ),
                   DecoratedBox(
@@ -209,11 +223,6 @@ class _FolderRow extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-            AmIconButton(
-              icon: Icons.more_vert_rounded,
-              tooltip: 'More',
-              onPressed: () {},
             ),
           ],
         ),
@@ -280,7 +289,6 @@ class _CenteredProgress extends StatelessWidget {
 }
 
 void _openFolder(BuildContext context, VideoFolder folder) {
-  context.read<VideosBloc>().add(OpenVideoFolderEvent(folder.id));
   Navigator.pushNamed(
     context,
     AppRouter.folderVideos,

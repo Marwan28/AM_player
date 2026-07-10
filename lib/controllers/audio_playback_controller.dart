@@ -20,7 +20,9 @@ class AudioPlaybackController extends ChangeNotifier
   LoopMode _repeatMode = LoopMode.all;
   double _speed = 1;
   Uri? _notificationArtUri;
+  Future<Uri?>? _notificationArtFuture;
   Timer? _saveTimer;
+  Timer? _stateSaveDebounce;
   StreamSubscription<int?>? _indexSubscription;
   StreamSubscription<PlayerState>? _stateSubscription;
   bool _dismissingSystemSession = false;
@@ -31,7 +33,7 @@ class AudioPlaybackController extends ChangeNotifier
     _indexSubscription = player.currentIndexStream.listen((index) {
       if (index != null && index >= 0 && index < _queue.length) {
         _currentIndex = index;
-        _savePlaybackState();
+        _schedulePlaybackStateSave();
         notifyListeners();
       }
     });
@@ -39,12 +41,17 @@ class AudioPlaybackController extends ChangeNotifier
       if (player.playing) {
         _pausedFromApp = false;
       }
-      _savePlaybackState();
+      if (!_dismissingSystemSession) {
+        _schedulePlaybackStateSave();
+      }
       notifyListeners();
     });
-    _saveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      _savePlaybackState();
+    _saveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_dismissingSystemSession && hasQueue && player.playing) {
+        _savePlaybackState();
+      }
     });
+    unawaited(_resolveNotificationArtUri());
   }
 
   List<Song> get queue => List.unmodifiable(_queue);
@@ -64,7 +71,13 @@ class AudioPlaybackController extends ChangeNotifier
     final snapshot = await repository.loadPlaybackSnapshot();
     if (snapshot?.assetId == null) return false;
     final savedAssetId = snapshot?.assetId;
-    final index = songs.indexWhere((song) => song.id == savedAssetId);
+    final songsById = {for (final song in songs) song.id: song};
+    final savedQueue = [
+      for (final assetId in snapshot?.queueAssetIds ?? const <String>[])
+        if (songsById[assetId] case final Song song) song,
+    ];
+    final restoredQueue = savedQueue.isEmpty ? songs : savedQueue;
+    final index = restoredQueue.indexWhere((song) => song.id == savedAssetId);
     if (index < 0) return false;
 
     _shuffleEnabled = snapshot?.shuffleEnabled ?? false;
@@ -72,19 +85,34 @@ class AudioPlaybackController extends ChangeNotifier
     _speed = snapshot?.speed ?? 1;
     _pausedFromApp = !(snapshot?.wasPlaying ?? false);
     await _loadQueue(
-      songs,
+      restoredQueue,
       initialIndex: index,
       initialPosition: snapshot?.position ?? Duration.zero,
-      play: snapshot?.wasPlaying ?? false,
+      play: false,
     );
     return true;
   }
 
   Future<void> playQueue(List<Song> songs, int index) async {
     if (songs.isEmpty) return;
+    final safeIndex = index.clamp(0, songs.length - 1).toInt();
+    if (_matchesCurrentQueue(songs)) {
+      if (_currentIndex != safeIndex) {
+        await playAt(safeIndex);
+      } else if (!player.playing) {
+        _pausedFromApp = false;
+        if (player.processingState == ProcessingState.completed) {
+          await player.seek(Duration.zero, index: safeIndex);
+        }
+        await player.play();
+        await _savePlaybackState();
+        notifyListeners();
+      }
+      return;
+    }
     await _loadQueue(
       songs,
-      initialIndex: index.clamp(0, songs.length - 1).toInt(),
+      initialIndex: safeIndex,
       initialPosition: Duration.zero,
       play: true,
     );
@@ -115,6 +143,14 @@ class AudioPlaybackController extends ChangeNotifier
       await player.play();
     }
     await _savePlaybackState();
+    notifyListeners();
+  }
+
+  Future<void> pauseForVideo() async {
+    if (!hasQueue || !player.playing) return;
+    _pausedFromApp = false;
+    await player.pause();
+    await _savePlaybackState(wasPlaying: false);
     notifyListeners();
   }
 
@@ -245,6 +281,7 @@ class AudioPlaybackController extends ChangeNotifier
   }) async {
     _queue = songs;
     _currentIndex = initialIndex;
+    final queueAssetIds = [for (final song in songs) song.id];
     final artUri = await _resolveNotificationArtUri();
     final source = ConcatenatingAudioSource(
       children: [
@@ -272,13 +309,26 @@ class AudioPlaybackController extends ChangeNotifier
     await player.setShuffleModeEnabled(_shuffleEnabled);
     await player.setSpeed(_speed);
     if (play) await player.play();
+    await repository.savePlaybackQueue(queueAssetIds);
     await _savePlaybackState();
     notifyListeners();
   }
 
-  Future<Uri?> _resolveNotificationArtUri() async {
-    if (_notificationArtUri != null) return _notificationArtUri;
+  bool _matchesCurrentQueue(List<Song> songs) {
+    if (_queue.length != songs.length) return false;
+    for (var index = 0; index < songs.length; index++) {
+      if (_queue[index].id != songs[index].id) return false;
+    }
+    return true;
+  }
 
+  Future<Uri?> _resolveNotificationArtUri() {
+    final cachedUri = _notificationArtUri;
+    if (cachedUri != null) return Future<Uri?>.value(cachedUri);
+    return _notificationArtFuture ??= _loadNotificationArtUri();
+  }
+
+  Future<Uri?> _loadNotificationArtUri() async {
     try {
       final data = await rootBundle.load('assets/images/audio_cover.png');
       final directory = await getTemporaryDirectory();
@@ -315,6 +365,9 @@ class AudioPlaybackController extends ChangeNotifier
     Duration? position,
     bool? wasPlaying,
   }) {
+    if (!hasQueue) return Future<void>.value();
+    _stateSaveDebounce?.cancel();
+    _stateSaveDebounce = null;
     return repository.savePlaybackSnapshot(
       assetId: currentSong?.id,
       position: position ?? player.position,
@@ -323,6 +376,14 @@ class AudioPlaybackController extends ChangeNotifier
       speed: _speed,
       wasPlaying: wasPlaying ?? player.playing,
     );
+  }
+
+  void _schedulePlaybackStateSave() {
+    _stateSaveDebounce?.cancel();
+    _stateSaveDebounce = Timer(const Duration(milliseconds: 250), () {
+      _stateSaveDebounce = null;
+      unawaited(_savePlaybackState());
+    });
   }
 
   String repeatLabel() {
@@ -374,6 +435,7 @@ class AudioPlaybackController extends ChangeNotifier
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _saveTimer?.cancel();
+    _stateSaveDebounce?.cancel();
     unawaited(_indexSubscription?.cancel());
     unawaited(_stateSubscription?.cancel());
     unawaited(_savePlaybackState());

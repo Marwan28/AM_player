@@ -7,8 +7,12 @@ abstract class SongsEvent {
 
 class LoadSongsEvent extends SongsEvent {
   final bool refresh;
+  final bool syncIfEmpty;
 
-  const LoadSongsEvent({this.refresh = false});
+  const LoadSongsEvent({
+    this.refresh = false,
+    this.syncIfEmpty = true,
+  });
 }
 
 class SearchSongsEvent extends SongsEvent {

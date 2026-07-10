@@ -1,10 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppThemeController {
+  static const _themeKey = 'app_theme_mode';
+  static final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   static final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.dark);
+
+  static Future<void> initialize() async {
+    try {
+      final savedMode = await _preferences.getString(_themeKey);
+      mode.value = savedMode == 'light' ? ThemeMode.light : ThemeMode.dark;
+    } catch (_) {
+      mode.value = ThemeMode.dark;
+    }
+  }
 
   static void setMode(ThemeMode themeMode) {
     mode.value = themeMode;
+    unawaited(
+      _preferences.setString(
+        _themeKey,
+        themeMode == ThemeMode.light ? 'light' : 'dark',
+      ),
+    );
   }
 
   static void toggle() {

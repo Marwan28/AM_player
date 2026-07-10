@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:equatable/equatable.dart';
 
 class VideoItem extends Equatable {
@@ -32,6 +34,16 @@ class VideoItem extends Equatable {
   }
 
   Duration get duration => Duration(milliseconds: durationMs);
+
+  String get resolutionLabel {
+    final shortEdge = math.min(width, height);
+    if (shortEdge >= 2160) return '4K';
+    if (shortEdge >= 1440) return '1440p';
+    if (shortEdge >= 1080) return '1080p';
+    if (shortEdge >= 720) return '720p';
+    if (shortEdge > 0) return '${shortEdge}p';
+    return 'Unknown';
+  }
 
   Map<String, Object?> toMap() {
     return {
