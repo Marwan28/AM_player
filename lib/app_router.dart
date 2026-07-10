@@ -1,5 +1,6 @@
 import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
+import 'package:am_player/models/video_item.dart';
 import 'package:am_player/screens/folder_videos.dart';
 import 'package:am_player/screens/home.dart';
 import 'package:am_player/screens/loading.dart';
@@ -66,11 +67,17 @@ class AppRouter {
           ),
         );
       case '/playVideo':
+        final video = settings.arguments is VideoItem
+            ? settings.arguments as VideoItem
+            : null;
+        if (video != null) {
+          videosBloc.add(SelectVideoEvent(video));
+        }
         return MaterialPageRoute(
           settings: settings,
           builder: (context) => BlocProvider<VideosBloc>.value(
             value: videosBloc,
-            child: const PlayVideoScreen(),
+            child: PlayVideoScreen(initialVideo: video),
           ),
         );
       case '/settings':

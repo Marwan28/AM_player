@@ -10,13 +10,14 @@ import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 import 'package:simple_pip_mode/actions/pip_action.dart';
 import 'package:simple_pip_mode/actions/pip_actions_layout.dart';
-import 'package:simple_pip_mode/pip_widget.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
 
 enum _VideoEndMode { playNext, repeatOne }
 
 class PlayVideoScreen extends StatefulWidget {
-  const PlayVideoScreen({Key? key}) : super(key: key);
+  final VideoItem? initialVideo;
+
+  const PlayVideoScreen({Key? key, this.initialVideo}) : super(key: key);
 
   @override
   State<PlayVideoScreen> createState() => _PlayVideoScreenState();
@@ -24,8 +25,8 @@ class PlayVideoScreen extends StatefulWidget {
 
 class _PlayVideoScreenState extends State<PlayVideoScreen> {
   final VideoLibraryRepository repository = VideoLibraryRepository();
-  final SimplePip pip = SimplePip();
 
+  late final SimplePip pip;
   late final mk.Player player;
   late final mkv.VideoController controller;
   late VideoItem video;
@@ -49,7 +50,15 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   @override
   void initState() {
     super.initState();
-    video = context.read<VideosBloc>().state.currentVideo!;
+    pip = SimplePip(
+      onPipEntered: _onPipEntered,
+      onPipExited: _onPipExited,
+      onPipAction: _handlePipAction,
+    );
+    unawaited(pip.setPipActionsLayout(PipActionsLayout.mediaWithSeek10));
+
+    video =
+        widget.initialVideo ?? context.read<VideosBloc>().state.currentVideo!;
     player = mk.Player();
     controller = mkv.VideoController(player);
 
@@ -81,15 +90,67 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
 
   Future<void> _openVideo({required bool resume}) async {
     setState(() => opening = true);
-    final resumePosition = resume
+    final savedPosition = resume
         ? await repository.loadPlaybackPosition(video.assetId)
         : Duration.zero;
+    final startPosition = await _resolveStartPosition(savedPosition);
     await player.open(
-      mk.Media(video.path, start: resumePosition),
+      mk.Media(video.path, start: startPosition),
       play: true,
     );
     if (!mounted) return;
     setState(() => opening = false);
+  }
+
+  Future<Duration> _resolveStartPosition(Duration savedPosition) async {
+    if (savedPosition < const Duration(seconds: 2)) return Duration.zero;
+
+    final duration = video.duration;
+    if (duration > Duration.zero &&
+        savedPosition >= duration - const Duration(seconds: 5)) {
+      await repository.clearPlaybackPosition(video.assetId);
+      return Duration.zero;
+    }
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return Duration.zero;
+
+    final shouldResume = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Resume video?'),
+          content: Text(
+            'Continue from ${_formatPromptDuration(savedPosition)} or start from the beginning?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Start over'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Resume'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldResume == true) return savedPosition;
+
+    await repository.clearPlaybackPosition(video.assetId);
+    return Duration.zero;
+  }
+
+  String _formatPromptDuration(Duration duration) {
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    if (hours == 0) return '$minutes:$seconds';
+    return '${twoDigits(hours)}:$minutes:$seconds';
   }
 
   Future<void> _handleVideoCompleted() async {
@@ -189,9 +250,47 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   }
 
   Future<void> _enterPip() async {
-    if (await SimplePip.isPipAvailable) {
-      await pip.enterPipMode();
+    if (!await SimplePip.isPipAvailable) return;
+    hideTimer?.cancel();
+
+    if (mounted) {
+      setState(() {
+        isInPip = true;
+        showControls = false;
+        showSpeedChoices = false;
+      });
     }
+
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+
+    final entered = await pip.enterPipMode(seamlessResize: true);
+    if (!entered && mounted) {
+      setState(() {
+        isInPip = false;
+        showControls = true;
+      });
+      _scheduleHideControls();
+    }
+  }
+
+  void _onPipEntered() {
+    if (!mounted) return;
+    setState(() {
+      isInPip = true;
+      showControls = false;
+      showSpeedChoices = false;
+    });
+  }
+
+  void _onPipExited() {
+    if (!mounted) return;
+    setState(() {
+      isInPip = false;
+      showControls = true;
+    });
+    _scheduleHideControls();
   }
 
   void _handlePipAction(PipAction action) {
@@ -348,35 +447,19 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PipWidget(
-        pipLayout: PipActionsLayout.mediaWithSeek10,
-        onPipEntered: () {
-          setState(() {
-            isInPip = true;
-            showControls = false;
-          });
-        },
-        onPipExited: () {
-          setState(() {
-            isInPip = false;
-            showControls = true;
-          });
-          _scheduleHideControls();
-        },
-        onPipAction: _handlePipAction,
-        pipChild: _pipPlayerView(),
-        child: _normalPlayerView(),
-      ),
+      body: isInPip ? _pipOnlyPlayerView() : _normalPlayerView(),
     );
   }
 
-  Widget _pipPlayerView() {
+  Widget _pipOnlyPlayerView() {
     return ColoredBox(
       color: Colors.black,
-      child: mkv.Video(
-        controller: controller,
-        fit: BoxFit.contain,
-        controls: mkv.NoVideoControls,
+      child: SizedBox.expand(
+        child: mkv.Video(
+          controller: controller,
+          fit: BoxFit.contain,
+          controls: mkv.NoVideoControls,
+        ),
       ),
     );
   }
@@ -386,14 +469,6 @@ class _PlayVideoScreenState extends State<PlayVideoScreen> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _toggleControls,
-        onDoubleTapDown: (details) {
-          final width = MediaQuery.of(context).size.width;
-          if (details.localPosition.dx < width / 2) {
-            _seekRelative(const Duration(seconds: -10));
-          } else {
-            _seekRelative(const Duration(seconds: 10));
-          }
-        },
         child: Stack(
           alignment: Alignment.center,
           children: [

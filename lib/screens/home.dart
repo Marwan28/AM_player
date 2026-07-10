@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:am_player/app_router.dart';
+import 'package:am_player/repositories/app_state_repository.dart';
 import 'package:am_player/screens/songs_screens/songs_home_screen.dart';
 import 'package:am_player/screens/videos_screens/videos_home_screen.dart';
 import 'package:am_player/theme/app_theme.dart';
@@ -13,8 +16,22 @@ class Home extends StatefulWidget {
   State<Home> createState() => HomeState();
 }
 
-class HomeState extends State<Home> {
+class HomeState extends State<Home> with WidgetsBindingObserver {
+  final AppStateRepository _appStateRepository = AppStateRepository();
   int tabIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_restoreTabIndex());
+  }
+
+  Future<void> _restoreTabIndex() async {
+    final savedIndex = await _appStateRepository.loadHomeTabIndex();
+    if (!mounted || savedIndex == tabIndex) return;
+    setState(() => tabIndex = savedIndex);
+  }
 
   void _handleBottomNav(int index) {
     if (index == 3) {
@@ -22,6 +39,24 @@ class HomeState extends State<Home> {
       return;
     }
     setState(() => tabIndex = index);
+    unawaited(_appStateRepository.saveHomeTabIndex(index));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_appStateRepository.saveHomeTabIndex(tabIndex));
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_appStateRepository.saveHomeTabIndex(tabIndex));
+    super.dispose();
   }
 
   @override
@@ -153,7 +188,6 @@ class _PhotosPlaceholder extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: const [
-        AmAdBanner(),
         AmSectionHeader(label: 'Photos'),
         _EmptyFeature(
           icon: Icons.image_outlined,

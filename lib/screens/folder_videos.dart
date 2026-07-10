@@ -87,7 +87,6 @@ class _FolderVideosScreenState extends State<FolderVideosScreen> {
                   final sortedVideos = _sortedVideos(videos);
                   return CustomScrollView(
                     slivers: [
-                      const SliverToBoxAdapter(child: AmAdBanner()),
                       if (gridMode)
                         SliverPadding(
                           padding: EdgeInsets.fromLTRB(12.w, 4.h, 12.w, 16.h),
@@ -298,7 +297,7 @@ class _VideoRow extends StatelessWidget {
     return InkWell(
       onTap: () {
         context.read<VideosBloc>().add(SelectVideoEvent(video));
-        Navigator.pushNamed(context, AppRouter.playVideo);
+        Navigator.pushNamed(context, AppRouter.playVideo, arguments: video);
       },
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
@@ -460,7 +459,7 @@ class _VideoGridTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(8.r),
       onTap: () {
         context.read<VideosBloc>().add(SelectVideoEvent(video));
-        Navigator.pushNamed(context, AppRouter.playVideo);
+        Navigator.pushNamed(context, AppRouter.playVideo, arguments: video);
       },
       child: Container(
         decoration: BoxDecoration(

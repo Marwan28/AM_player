@@ -1,4 +1,5 @@
 import 'package:am_player/app_router.dart';
+import 'package:am_player/bloc/songs_bloc/songs_bloc.dart';
 import 'package:am_player/bloc/videos_bloc/videos_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -15,6 +16,7 @@ class _LoadingState extends State<Loading> {
   @override
   void initState() {
     BlocProvider.of<VideosBloc>(context).add(const LoadVideosEvent());
+    BlocProvider.of<SongsBloc>(context).add(const LoadSongsEvent());
     super.initState();
   }
 

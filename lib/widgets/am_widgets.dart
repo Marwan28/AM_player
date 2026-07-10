@@ -151,6 +151,9 @@ class AmSectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
               style: TextStyle(
                 color: colors.onSurfaceVariant,
                 fontSize: 11.sp,
@@ -178,86 +181,6 @@ class AmSectionHeader extends StatelessWidget {
   }
 }
 
-class AmAdBanner extends StatefulWidget {
-  const AmAdBanner({super.key});
-
-  @override
-  State<AmAdBanner> createState() => _AmAdBannerState();
-}
-
-class _AmAdBannerState extends State<AmAdBanner> {
-  bool closed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    if (closed) return const SizedBox.shrink();
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-      padding: EdgeInsets.all(10.w),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32.w,
-            height: 32.w,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(4.r),
-            ),
-            child: Text(
-              'Ad',
-              style: TextStyle(
-                color: colors.onSurfaceVariant,
-                fontSize: 10.sp,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Upgrade to AM Pro',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  'Ad-free playback, more controls, unlimited codecs.',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 11.sp,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AmIconButton(
-            icon: Icons.close_rounded,
-            tooltip: 'Close ad',
-            onPressed: () => setState(() => closed = true),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class AmBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
@@ -269,7 +192,7 @@ class AmBottomNav extends StatelessWidget {
   });
 
   static const items = [
-    (Icons.movie_creation_outlined, 'Library'),
+    (Icons.movie_creation_outlined, 'Videos'),
     (Icons.music_note_rounded, 'Music'),
     (Icons.image_outlined, 'Photos'),
     (Icons.settings_outlined, 'Settings'),

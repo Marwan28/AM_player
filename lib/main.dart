@@ -9,8 +9,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
+    androidNotificationChannelId: 'com.example.am_player.audio.playback',
+    androidNotificationChannelName: 'AM Player playback',
     androidNotificationOngoing: true,
   );
   runApp(MyApp(
@@ -33,6 +33,11 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  static const Size _portraitDesignSize = Size(390, 844);
+  static const Size _landscapeDesignSize = Size(844, 390);
+
+  Size _designSize = _portraitDesignSize;
+
   //
   // Widget bottomPanel() {
   //   return Column(
@@ -206,11 +211,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _syncDesignSize();
   }
 
   @override
   void didChangeMetrics() {
-    if (mounted) setState(() {});
+    _syncDesignSize();
   }
 
   @override
@@ -221,18 +227,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final logicalSize = view.physicalSize / view.devicePixelRatio;
-    final designSize = logicalSize.width > logicalSize.height
-        ? const Size(844, 390)
-        : const Size(390, 844);
-
     return ScreenUtilInit(
-      key: ValueKey(designSize),
-      designSize: designSize,
+      designSize: _designSize,
       minTextAdapt: true,
       splitScreenMode: true,
-      rebuildFactor: RebuildFactors.change,
+      rebuildFactor: _shouldRebuildScreenUtil,
       builder: (context, child) {
         return ValueListenableBuilder<ThemeMode>(
           valueListenable: AppThemeController.mode,
@@ -249,6 +248,38 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         );
       },
     );
+  }
+
+  void _syncDesignSize() {
+    final logicalSize = _logicalWindowSize();
+    if (_isPipWindow(logicalSize)) return;
+
+    final nextDesignSize = logicalSize.width > logicalSize.height
+        ? _landscapeDesignSize
+        : _portraitDesignSize;
+    if (nextDesignSize == _designSize) return;
+
+    if (mounted) {
+      setState(() => _designSize = nextDesignSize);
+    } else {
+      _designSize = nextDesignSize;
+    }
+  }
+
+  Size _logicalWindowSize() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    return view.physicalSize / view.devicePixelRatio;
+  }
+
+  bool _shouldRebuildScreenUtil(MediaQueryData oldData, MediaQueryData data) {
+    if (_isPipWindow(data.size)) return false;
+    return oldData.size != data.size ||
+        oldData.orientation != data.orientation ||
+        oldData.devicePixelRatio != data.devicePixelRatio;
+  }
+
+  bool _isPipWindow(Size size) {
+    return size.shortestSide < 300 || size.longestSide < 500;
   }
   // Widget scaffold(){
   //   return Scaffold(

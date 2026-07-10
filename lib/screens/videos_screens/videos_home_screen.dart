@@ -59,7 +59,6 @@ class _VideosHomeScreenState extends State<VideosHomeScreen>
           },
           child: CustomScrollView(
             slivers: [
-              const SliverToBoxAdapter(child: AmAdBanner()),
               SliverToBoxAdapter(
                 child: _SyncStrip(
                   isSyncing: state.isSyncing,
