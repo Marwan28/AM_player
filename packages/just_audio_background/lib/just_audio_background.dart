@@ -680,9 +680,9 @@ class _PlayerAudioHandler extends BaseAudioHandler
   /// Broadcasts the current state to all clients.
   void _broadcastState() {
     final controls = [
-      if (hasPrevious) MediaControl.skipToPrevious,
+      MediaControl.skipToPrevious,
       if (_playing) MediaControl.pause else MediaControl.play,
-      if (hasNext) MediaControl.skipToNext,
+      MediaControl.skipToNext,
     ];
     playbackState.add(playbackState.nvalue!.copyWith(
       controls: controls,

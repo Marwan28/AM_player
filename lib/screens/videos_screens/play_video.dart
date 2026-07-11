@@ -133,8 +133,29 @@ class _PlayVideoScreenState extends State<PlayVideoScreen>
         _savePlaybackPosition();
         break;
       case AppLifecycleState.resumed:
+        unawaited(_syncPipState());
         break;
     }
+  }
+
+  Future<void> _syncPipState() async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+
+    var pipActive = false;
+    try {
+      pipActive = await SimplePip.isPipActivated;
+    } catch (_) {
+      pipActive = false;
+    }
+    if (!mounted || pipActive == isInPip) return;
+
+    setState(() {
+      isInPip = pipActive;
+      showControls = !pipActive;
+      if (!pipActive) showSpeedChoices = false;
+    });
+    if (!pipActive) _scheduleHideControls();
   }
 
   Future<void> _openVideo({required bool resume}) async {
@@ -407,6 +428,7 @@ class _PlayVideoScreenState extends State<PlayVideoScreen>
     setState(() {
       isInPip = false;
       showControls = true;
+      showSpeedChoices = false;
     });
     _scheduleHideControls();
   }
